@@ -1,0 +1,516 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Live Guessing Game</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; -webkit-tap-highlight-color: transparent; }
+        .modal-backdrop { background-color: rgba(0,0,0,0.8); }
+        .strip-segment, .number-circle { transition: all 0.5s ease-in-out; }
+        .clickable-grid .number-circle { cursor: pointer; }
+        .clickable-grid .number-circle:hover { background-color: #0e7490; transform: scale(1.1); }
+        .player-card { transition: all 0.5s ease-in-out; }
+        .score-strip-container { transition: height 0.7s ease-in-out; }
+        
+        /* Golden shining frame for the perfect winner */
+        @keyframes shining {
+            0% { box-shadow: 0 0 5px #fbbf24, 0 0 10px #fbbf24, 0 0 20px #f59e0b, 0 0 30px #f59e0b; }
+            50% { box-shadow: 0 0 10px #fcd34d, 0 0 20px #fcd34d, 0 0 30px #fbbf24, 0 0 40px #fbbf24; }
+            100% { box-shadow: 0 0 5px #fbbf24, 0 0 10px #fbbf24, 0 0 20px #f59e0b, 0 0 30px #f59e0b; }
+        }
+        .winner-photo-frame-perfect {
+            border: 4px solid #fcd34d;
+            animation: shining 2s infinite linear;
+        }
+        .winner-photo-frame-normal {
+             border: 4px solid #ffffff;
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-white flex items-center justify-center min-h-screen p-2 sm:p-4 overflow-hidden">
+
+    <div id="app-container" class="w-full max-w-7xl mx-auto">
+
+        <div id="login-modal" class="fixed inset-0 z-50 flex items-center justify-center modal-backdrop">
+            <div class="bg-gray-800 rounded-2xl shadow-2xl p-6 sm:p-8 w-full max-w-sm text-center border border-gray-700">
+                <h2 class="text-3xl font-bold mb-2 text-cyan-400">Join the Game</h2>
+                <p class="text-gray-400 mb-6">Select your USN to begin.</p>
+                <div class="mb-6">
+                    <div class="flex items-center bg-gray-900 border border-gray-600 rounded-lg">
+                        <span class="text-gray-400 pl-4">1SB23CS</span>
+                        <select id="usn-select" class="bg-gray-900 text-white p-3 rounded-r-lg w-full focus:outline-none focus:ring-2 focus:ring-cyan-500">
+                           <option value="000">000 (Eagle)</option>
+                        </select>
+                    </div>
+                </div>
+                <button id="join-btn" class="w-full bg-cyan-500 hover:bg-cyan-600 text-white font-bold py-3 px-4 rounded-lg text-lg transition duration-300" disabled>
+                    Join Game
+                </button>
+                 <p id="auth-status" class="text-xs text-gray-500 mt-4">Connecting...</p>
+            </div>
+        </div>
+        
+        <div id="camera-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center modal-backdrop">
+            <div class="bg-gray-800 rounded-2xl shadow-2xl p-6 sm:p-8 w-full max-w-sm text-center border border-gray-700">
+                <h2 class="text-3xl font-bold mb-4 text-cyan-400">Take a Selfie</h2>
+                 <div class="w-48 h-48 mx-auto rounded-full overflow-hidden border-4 border-gray-600 mb-4 bg-gray-900">
+                    <video id="video-feed" class="w-full h-full object-cover" autoplay playsinline></video>
+                    <canvas id="photo-canvas" class="hidden"></canvas>
+                </div>
+                <button id="take-photo-btn" class="w-full bg-green-500 hover:bg-green-600 text-white font-bold py-3 px-4 rounded-lg text-lg transition duration-300 mb-2">
+                    Take Photo
+                </button>
+                <p id="camera-status" class="text-xs text-gray-500 h-4"></p>
+            </div>
+        </div>
+
+
+        <div id="game-ui" class="hidden">
+            <div class="text-center mb-6">
+                <h1 class="text-3xl sm:text-4xl font-extrabold tracking-tight">
+                    <span class="bg-clip-text text-transparent bg-gradient-to-r from-cyan-400 to-blue-500">Guess the Secret Number</span>
+                </h1>
+                <p class="text-gray-400 mt-2 text-md">The number is between 1 and 100.</p>
+                 <p class="text-xs text-gray-500 mt-1">Your User ID: <span id="user-id-display" class="font-mono"></span></p>
+            </div>
+
+            <div id="player-section" class="bg-gray-800 border border-gray-700 rounded-2xl p-4 sm:p-6 mb-6 max-w-lg mx-auto">
+                 <div class="flex justify-between items-center mb-4">
+                    <h2 class="text-xl sm:text-2xl font-bold text-cyan-400" id="player-name"></h2>
+                    <div class="text-lg font-mono bg-gray-900 px-3 py-1 rounded-lg">
+                        <span id="game-timer">100</span>s
+                    </div>
+                </div>
+                
+                <div id="standard-input-section" class="flex items-center gap-2 sm:gap-4 mb-2">
+                    <input type="number" id="guess-input" placeholder="Enter guess..." class="w-full bg-gray-900 border border-gray-600 rounded-lg p-3 text-white text-lg focus:outline-none focus:ring-2 focus:ring-cyan-500">
+                    <button id="guess-btn" class="bg-cyan-500 hover:bg-cyan-600 text-white font-bold py-3 px-6 rounded-lg text-lg transition duration-300">Guess</button>
+                </div>
+                
+                <p id="feedback" class="text-center h-6 text-yellow-400 font-medium"></p>
+                
+                <div id="number-grid-container" class="mt-4 border-t border-gray-700 pt-4 hidden">
+                    <h3 class="text-sm font-medium text-gray-400 text-center mb-2">Click a Number to Guess</h3>
+                    <div id="number-grid" class="grid grid-cols-10 gap-1.5 sm:gap-2"></div>
+                    <div id="search-space-display" class="hidden mt-3 flex justify-around text-center bg-gray-900 p-2 rounded-lg">
+                        <div><p class="text-xs text-gray-400">Low</p><p id="low-val" class="font-bold text-xl">1</p></div>
+                        <div><p class="text-xs text-green-400">Mid</p><p id="mid-val" class="font-bold text-xl text-green-400">50</p></div>
+                        <div><p class="text-xs text-gray-400">High</p><p id="high-val" class="font-bold text-xl">100</p></div>
+                    </div>
+                </div>
+            </div>
+            
+            <div>
+                <h3 class="text-2xl sm:text-3xl font-bold text-center mb-4">Live Player Board</h3>
+                <div id="player-graph" class="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 xl:grid-cols-10 gap-x-2 gap-y-4 sm:gap-6"></div>
+            </div>
+        </div>
+        
+        <div id="winner-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center modal-backdrop">
+            <div class="bg-gray-800 rounded-2xl shadow-2xl p-6 sm:p-8 w-full max-w-sm text-center border border-amber-400 transform scale-95 opacity-0 transition-all duration-300">
+                <h2 class="text-4xl font-extrabold mb-4 text-amber-300">WINNER!</h2>
+                <div id="winner-info" class="flex flex-col items-center"></div>
+                <button id="new-game-btn" class="mt-6 w-full bg-green-500 hover:bg-green-600 text-white font-bold py-3 px-6 rounded-lg text-lg transition duration-300">
+                    Start New Game
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.2/dist/confetti.browser.min.js"></script>
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-app.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
+        import { getFirestore, doc, setDoc, onSnapshot, collection, writeBatch, getDoc, query, serverTimestamp, updateDoc } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
+
+        // --- Firebase Config & Init ---
+        const firebaseConfig = { apiKey: "AIzaSyCXGaRmvEzMU0S50hcqYSz078qcmjDKfaE", authDomain: "guessrandom-eagle.firebaseapp.com", projectId: "guessrandom-eagle", storageBucket: "guessrandom-eagle.firebasestorage.app", messagingSenderId: "1015411844496", appId: "1:1015411844496:web:bae327949dd143a7f93f15", measurementId: "G-P8X7VMZVH4" };
+        const gameId = firebaseConfig.projectId;
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+        
+        // --- NEW: Data map for USN to Names ---
+        // --- Simply add the names for each USN here. ---
+        const USN_NAME_MAP = {
+            '000': 'The Eagle',
+            '001': 'Aarav Sharma',
+            '002': 'Priya Patel',
+            '003': 'Rohan Kumar',
+            '004': 'Sneha Reddy',
+            '005': 'Vikram Singh',
+            // Add all 100 names here...
+        };
+
+
+        // --- Game Constants & State ---
+        const MIN_NUM = 1, MAX_NUM = 100, GAME_DURATION = 100;
+        let currentUser = null, currentUserId = null, isSpecialUser = false, isProcessingGuess = false;
+        let gameListener = null, gameTimerInterval = null, localPhotoDataUrl = null;
+        let localLow = MIN_NUM, localHigh = MAX_NUM;
+
+        // --- DOM Elements ---
+        const usnSelect = document.getElementById('usn-select'), joinBtn = document.getElementById('join-btn'), loginModal = document.getElementById('login-modal'), authStatus = document.getElementById('auth-status');
+        const cameraModal = document.getElementById('camera-modal'), videoFeed = document.getElementById('video-feed'), photoCanvas = document.getElementById('photo-canvas'), takePhotoBtn = document.getElementById('take-photo-btn'), cameraStatus = document.getElementById('camera-status');
+        const gameUi = document.getElementById('game-ui'), standardInputSection = document.getElementById('standard-input-section'), guessInput = document.getElementById('guess-input'), guessBtn = document.getElementById('guess-btn'), feedback = document.getElementById('feedback'), playerNameEl = document.getElementById('player-name'), playerGraph = document.getElementById('player-graph'), gameTimer = document.getElementById('game-timer'), userIdDisplay = document.getElementById('user-id-display');
+        const numberGridContainer = document.getElementById('number-grid-container'), numberGrid = document.getElementById('number-grid'), searchSpaceDisplay = document.getElementById('search-space-display');
+        const winnerModal = document.getElementById('winner-modal'), winnerInfo = document.getElementById('winner-info'), newGameBtn = document.getElementById('new-game-btn');
+
+        // --- Mock Data ---
+        function populateUSNSelect() { for (let i = 1; i <= 100; i++) { const o = document.createElement('option'); o.value = i.toString().padStart(3, '0'); o.textContent = o.value; usnSelect.appendChild(o); } }
+
+        // --- Camera Logic ---
+        async function startCamera() {
+            loginModal.classList.add('hidden');
+            cameraModal.classList.remove('hidden');
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: false });
+                videoFeed.srcObject = stream;
+                cameraStatus.textContent = "Align your face and take a photo.";
+            } catch (err) {
+                console.error("Camera access denied:", err);
+                cameraStatus.textContent = "Camera access denied. Cannot proceed.";
+                takePhotoBtn.disabled = true;
+            }
+        }
+
+        function takePhoto() {
+            const context = photoCanvas.getContext('2d');
+            photoCanvas.width = videoFeed.videoWidth;
+            photoCanvas.height = videoFeed.videoHeight;
+            context.drawImage(videoFeed, 0, 0, photoCanvas.width, photoCanvas.height);
+            localPhotoDataUrl = photoCanvas.toDataURL('image/jpeg', 0.8);
+            
+            const stream = videoFeed.srcObject;
+            if (stream) {
+                const tracks = stream.getTracks();
+                tracks.forEach(track => track.stop());
+                videoFeed.srcObject = null;
+            }
+            
+            cameraModal.classList.add('hidden');
+            joinGame();
+        }
+
+        // --- UI & Game Logic ---
+        function populateNumberGrid() {
+            numberGrid.innerHTML = '';
+            for (let i = MIN_NUM; i <= MAX_NUM; i++) {
+                const circle = document.createElement('div');
+                circle.className = 'number-circle w-8 h-8 rounded-full flex items-center justify-center text-xs font-semibold bg-cyan-700';
+                circle.textContent = i;
+                circle.dataset.number = i;
+                circle.addEventListener('click', (e) => {
+                    if (!isSpecialUser || isProcessingGuess) return;
+                    const guess = parseInt(e.currentTarget.dataset.number);
+                    processGuess(guess);
+                });
+                numberGrid.appendChild(circle);
+            }
+        }
+
+        function updateNumberGrid(guess, feedbackType) {
+            document.querySelectorAll('.number-circle').forEach(c => {
+                const n = parseInt(c.dataset.number);
+                let d = false;
+                if (feedbackType === 'higher') { if (n <= guess) d = true; } 
+                else if (feedbackType === 'lower') { if (n >= guess) d = true; }
+                if (d) c.classList.add('opacity-20');
+            });
+        }
+
+        function resetNumberGrid() {
+            document.querySelectorAll('.number-circle').forEach(c => c.classList.remove('opacity-20'));
+        }
+
+        function setupUIForUser() {
+            if (isSpecialUser) {
+                standardInputSection.classList.add('hidden');
+                numberGridContainer.classList.remove('hidden');
+                numberGrid.classList.add('clickable-grid');
+                searchSpaceDisplay.classList.remove('hidden');
+            } else {
+                standardInputSection.classList.remove('hidden');
+                numberGridContainer.classList.add('hidden');
+                numberGrid.classList.remove('clickable-grid');
+                searchSpaceDisplay.classList.add('hidden');
+            }
+        }
+        
+        function updateSearchSpaceDisplay(low, high) {
+            document.getElementById('low-val').textContent = low;
+            document.getElementById('high-val').textContent = high;
+            document.getElementById('mid-val').textContent = Math.floor((low + high) / 2);
+        }
+
+        function calculateBinarySearchPath(target, min, max) {
+            let path = [], low = min, high = max;
+            while (low <= high) {
+                let mid = Math.floor((low + high) / 2);
+                path.push(mid);
+                if (mid === target) return path;
+                if (mid < target) low = mid + 1;
+                else high = mid - 1;
+            }
+            return path;
+        }
+
+        async function joinGame() {
+            if (!currentUser || !localPhotoDataUrl) {
+                 alert("Authentication or photo missing! Please refresh and try again.");
+                 return;
+            }
+            
+            loginModal.classList.add('hidden');
+            const usnValue = usnSelect.value;
+            const usn = `1SB23CS${usnValue}`;
+            const playerName = USN_NAME_MAP[usnValue] || `Player ${usnValue}`;
+
+            const playerDocRef = doc(db, `games/${gameId}/players/${currentUserId}`);
+            await setDoc(playerDocRef, { usn, name: playerName, photoURL: localPhotoDataUrl, guesses: [], startTime: serverTimestamp(), timeTaken: null, isWinner: false, isPerfect: false, isEliminated: false });
+
+            gameUi.classList.remove('hidden');
+            playerNameEl.textContent = playerName;
+            userIdDisplay.textContent = currentUserId;
+            localLow = MIN_NUM; localHigh = MAX_NUM;
+            
+            setupUIForUser();
+            resetNumberGrid();
+            if(isSpecialUser) updateSearchSpaceDisplay(localLow, localHigh);
+
+            await ensureGameIsRunning();
+            attachGameListener();
+        }
+
+        async function ensureGameIsRunning() {
+             const docRef = doc(db, `games/${gameId}/config/main`);
+             const docSnap = await getDoc(docRef);
+             if (!docSnap.exists() || !docSnap.data()?.secretNumber || !docSnap.data()?.perfectPath) {
+                 let secretNumber, perfectPath;
+                 do {
+                    secretNumber = Math.floor(Math.random() * (MAX_NUM - MIN_NUM + 1)) + MIN_NUM;
+                    perfectPath = calculateBinarySearchPath(secretNumber, MIN_NUM, MAX_NUM);
+                 } while (perfectPath.length < 4);
+                 
+                 await setDoc(docRef, { secretNumber, perfectPath, winnerId: null });
+             }
+        }
+        
+        async function processGuess(guess) {
+            if (isProcessingGuess || isNaN(guess)) return;
+            isProcessingGuess = true;
+
+            const gameDocSnap = await getDoc(doc(db, `games/${gameId}/config/main`));
+            const { secretNumber, perfectPath } = gameDocSnap.data();
+            const playerDocSnap = await getDoc(doc(db, `games/${gameId}/players/${currentUserId}`));
+            const player = playerDocSnap.data();
+
+            if (!player || player.isWinner || player.isEliminated) { isProcessingGuess = false; return; }
+            
+            const currentStep = player.guesses.length;
+            const isGolden = perfectPath && guess === perfectPath[currentStep];
+            const newGuesses = [...player.guesses, { guess, isGolden }];
+            
+            if (guess === secretNumber) {
+                feedback.textContent = "🎉 Correct! You've found the number! 🎉";
+                await processWin(newGuesses);
+            } else {
+                const feedbackType = guess < secretNumber ? 'higher' : 'lower';
+                feedback.textContent = `${feedbackType.charAt(0).toUpperCase() + feedbackType.slice(1)} than ${guess}`;
+                if (isSpecialUser) {
+                    if (feedbackType === 'higher') localLow = Math.max(localLow, guess + 1);
+                    else localHigh = Math.min(localHigh, guess - 1);
+                    updateSearchSpaceDisplay(localLow, localHigh);
+                    updateNumberGrid(guess, feedbackType);
+                }
+                await updateDoc(doc(db, `games/${gameId}/players/${currentUserId}`), { guesses: newGuesses });
+            }
+            isProcessingGuess = false;
+        }
+
+        async function processWin(finalGuesses) {
+            const playerDocSnap = await getDoc(doc(db, `games/${gameId}/players/${currentUserId}`));
+            const startTime = playerDocSnap.data().startTime.toDate();
+            const timeTaken = (new Date() - startTime) / 1000;
+            const gameConfigSnap = await getDoc(doc(db, `games/${gameId}/config/main`));
+            const perfectPath = gameConfigSnap.data().perfectPath || [];
+            const isPerfect = finalGuesses.length === perfectPath.length && finalGuesses.every((g, i) => g.guess === perfectPath[i]);
+            await updateDoc(doc(db, `games/${gameId}/players/${currentUserId}`), { guesses: finalGuesses, timeTaken, isWinner: true, isPerfect });
+            await updateDoc(doc(db, `games/${gameId}/config/main`), { winnerId: currentUserId });
+        }
+        
+        function handleTimerAndElimination(players) {
+            if(gameTimerInterval) clearInterval(gameTimerInterval);
+            const me = players.find(p => p.id === currentUserId);
+            if(!me || me.isWinner || me.isEliminated) { gameTimer.textContent = '---'; return; }
+
+            gameTimerInterval = setInterval(async () => {
+                const elapsed = (new Date() - me.startTime.toDate()) / 1000;
+                const timeLeft = Math.max(0, GAME_DURATION - elapsed);
+                gameTimer.textContent = Math.ceil(timeLeft);
+
+                if (timeLeft <= 0) {
+                    clearInterval(gameTimerInterval);
+                    feedback.textContent = "Time's up! You've been eliminated.";
+                    if(!isSpecialUser) {
+                        guessInput.disabled = true; 
+                        guessBtn.disabled = true;
+                    }
+                    await updateDoc(doc(db, `games/${gameId}/players/${currentUserId}`), { isEliminated: true });
+                }
+            }, 1000);
+        }
+
+        function renderPlayerGraph(players) {
+            playerGraph.innerHTML = '';
+            players.sort((a, b) => (a.startTime?.seconds || 0) - (b.startTime?.seconds || 0));
+
+            players.forEach(player => {
+                const card = document.createElement('div');
+                card.className = 'player-card flex flex-col items-center';
+                if(player.isEliminated) card.classList.add('opacity-40');
+                
+                const photoSrc = player.usn === '1SB23CS000' ? 'eagle.jpeg' : player.photoURL; // Using local eagle.jpeg
+                const timeTaken = player.timeTaken;
+                const maxStripHeight = 128;
+                const minStripHeight = 32;
+                let stripHeight = maxStripHeight;
+                if(timeTaken) {
+                    stripHeight = Math.max(minStripHeight, maxStripHeight / (timeTaken / 10 + 1));
+                }
+
+                card.innerHTML = `
+                    <img src="${photoSrc}" class="w-12 h-12 sm:w-16 sm:h-16 rounded-full object-cover border-2 ${player.isWinner ? 'border-amber-400' : 'border-gray-600'} mb-2">
+                    <div class="score-strip-container w-6 sm:w-8 bg-gray-700 rounded-md flex flex-col-reverse overflow-hidden" style="height: ${player.isWinner ? stripHeight : maxStripHeight}px;">
+                        ${Array.from({ length: 10 }).map((_, i) => {
+                            const guess = player.guesses[i];
+                            let colorClass = 'bg-gray-700';
+                            if (guess) colorClass = guess.isGolden ? 'bg-yellow-400' : 'bg-cyan-600';
+                            return `<div class="flex-1 ${colorClass}"></div>`;
+                        }).join('')}
+                    </div>
+                    <p class="text-xs font-semibold mt-1 truncate w-20 text-center">${player.name}</p>
+                    <p class="text-xs text-gray-400">${player.isWinner ? `${timeTaken.toFixed(1)}s` : player.isEliminated ? 'Eliminated' : ''}</p>
+                `;
+                playerGraph.appendChild(card);
+            });
+        }
+        
+        function checkGlobalWinner(players) {
+            const gameEnded = players.every(p => p.isWinner || p.isEliminated);
+            if (!gameEnded) return;
+
+            if (winnerModal.dataset.shown) return;
+            winnerModal.dataset.shown = 'true';
+
+            const winners = players.filter(p => p.isWinner);
+            if (winners.length === 0) {
+                winnerInfo.innerHTML = `<p class="text-xl text-gray-400">No one guessed the number in time!</p>`;
+            } else {
+                const perfectWinners = winners.filter(p => p.isPerfect);
+                const finalWinners = (perfectWinners.length > 0 ? perfectWinners : winners).sort((a,b) => a.timeTaken - b.timeTaken);
+                const topWinner = finalWinners[0];
+                const winnerPhotoSrc = topWinner.usn === '1SB23CS000' ? 'eagle.jpeg' : topWinner.photoURL; // Using local eagle.jpeg
+                const frameClass = topWinner.isPerfect ? 'winner-photo-frame-perfect' : 'winner-photo-frame-normal';
+
+                winnerInfo.innerHTML = `
+                    <img src="${winnerPhotoSrc}" class="${frameClass} w-32 h-32 rounded-full object-cover mb-4">
+                    <p class="text-2xl font-semibold">${topWinner.name}</p>
+                    <p class="text-gray-400">${topWinner.usn}</p>
+                    <p class="text-5xl font-bold my-2 text-green-300">${topWinner.timeTaken.toFixed(2)}s</p>
+                    ${topWinner.isPerfect ? '<p class="text-yellow-400 font-semibold text-xl">🏆 Flawless Victory! 🏆</p>' : ''}
+                `;
+            }
+
+            setTimeout(() => {
+                confetti({ particleCount: 150, spread: 90, origin: { y: 0.6 } });
+                winnerModal.classList.remove('hidden');
+                setTimeout(() => winnerModal.querySelector('div').classList.remove('scale-95', 'opacity-0'), 50);
+            }, 7000);
+        }
+
+        async function initializeAuth() {
+            onAuthStateChanged(auth, (user) => {
+                if (user) {
+                    currentUser = user;
+                    currentUserId = user.uid;
+                    authStatus.textContent = "Connected.";
+                    authStatus.classList.replace('text-gray-500', 'text-green-400');
+                    joinBtn.disabled = false;
+                } else {
+                    authStatus.textContent = "Auth Failed.";
+                }
+            });
+            try {
+                await signInAnonymously(auth);
+            } catch (error) {
+                console.error("Auth error:", error);
+            }
+        }
+
+        function attachGameListener() {
+            if (gameListener) gameListener();
+            gameListener = onSnapshot(query(collection(db, `games/${gameId}/players`)), (snapshot) => {
+                const allPlayers = [];
+                snapshot.forEach(doc => allPlayers.push({ id: doc.id, ...doc.data() }));
+                renderPlayerGraph(allPlayers);
+                handleTimerAndElimination(allPlayers);
+                checkGlobalWinner(allPlayers);
+            });
+        }
+
+        // --- Event Listeners & Init ---
+        function init() {
+            populateUSNSelect();
+            populateNumberGrid();
+            initializeAuth();
+            
+            // MODIFIED: Added password check for admin '000'
+            joinBtn.addEventListener('click', () => {
+                const usnValue = usnSelect.value;
+                if (usnValue === '000') {
+                    const password = prompt("Enter Admin Password:");
+                    if (password === "ak04@eagle") {
+                        isSpecialUser = true;
+                        localPhotoDataUrl = 'eagle.jpeg'; // Use local file
+                        loginModal.classList.add('hidden');
+                        joinGame();
+                    } else {
+                        alert("Incorrect password. Access denied.");
+                    }
+                } else {
+                    isSpecialUser = false;
+                    startCamera();
+                }
+            });
+
+            takePhotoBtn.addEventListener('click', takePhoto);
+            
+            guessBtn.addEventListener('click', () => {
+                const guessVal = parseInt(guessInput.value);
+                if (!isNaN(guessVal)) {
+                    processGuess(guessVal);
+                    guessInput.value = '';
+                }
+            });
+            
+            guessInput.addEventListener('keyup', (e) => {
+                if (e.key === 'Enter') {
+                    const guessVal = parseInt(guessInput.value);
+                    if (!isNaN(guessVal)) {
+                        processGuess(guessVal);
+                        guessInput.value = '';
+                    }
+                }
+            });
+            
+            newGameBtn.addEventListener('click', () => location.reload());
+        }
+        
+        init();
+    </script>
+</body>
+</html>
