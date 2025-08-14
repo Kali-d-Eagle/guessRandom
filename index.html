@@ -203,19 +203,15 @@
         function listenForSession() {
             const configRef = doc(db, `games/${gameId}/config/main`);
             const unsubscribe = onSnapshot(configRef, (docSnap) => {
-                if (!docSnap.exists()) {
-                    loginStatusText.textContent = "Waiting for Admin (005) to start a session...";
-                    joinBtn.disabled = true;
-                    return;
-                }
-                const isSessionActive = docSnap.data().sessionActive;
+                const isSessionActive = docSnap.exists() && docSnap.data().sessionActive;
                 if (isSessionActive) {
                     loginStatusText.textContent = "Session is active. Select your USN.";
                     joinBtn.disabled = false;
                 } else {
                     loginStatusText.textContent = "Waiting for Admin (005) to start a session...";
                     joinBtn.disabled = true;
-                    if (!loginModal.classList.contains('hidden')) {
+                    // FIXED: Only reload if the user is *not* on the login screen.
+                    if (loginModal.classList.contains('hidden')) {
                         alert("The admin has ended the session.");
                         location.reload();
                     }
@@ -232,12 +228,11 @@
                 const password = prompt("Enter Admin Password:");
                 if (password === "ak04@eagle") {
                     if (usnValue === '005') {
-                        await resetGameSession(true); // This starts the session
+                        await resetGameSession(true);
                     }
                     await joinGame(currentUserId, 'https://placehold.co/100x100/1e293b/94a3b8?text=🦅', true);
                 } else { alert("Incorrect password."); }
             } else {
-                // For regular users, check if a session is active before proceeding
                 const configRef = doc(db, `games/${gameId}/config/main`);
                 const configDoc = await getDoc(configRef);
                 if (configDoc.exists() && configDoc.data().sessionActive) {
