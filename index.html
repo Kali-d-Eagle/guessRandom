@@ -130,7 +130,7 @@
                 <h2 class="text-4xl font-extrabold mb-4 text-amber-300">GAME OVER</h2>
                 <div id="winner-info" class="flex flex-col items-center"></div>
                 <button id="new-game-btn" class="hidden mt-6 w-full bg-green-500 hover:bg-green-600 text-white font-bold py-3 px-6 rounded-lg text-lg transition duration-300">
-                    Start New Game
+                    Play Again
                 </button>
             </div>
         </div>
@@ -142,7 +142,6 @@
         import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
         import { getFirestore, doc, setDoc, onSnapshot, collection, writeBatch, getDoc, query, serverTimestamp, updateDoc, runTransaction, arrayUnion, deleteDoc, where } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
 
-        // --- Firebase Config & Init ---
         const firebaseConfig = { apiKey: "AIzaSyCXGaRmvEzMU0S50hcqYSz078qcmjDKfaE", authDomain: "guessrandom-eagle.firebaseapp.com", projectId: "guessrandom-eagle", storageBucket: "guessrandom-eagle.firebasestorage.app", messagingSenderId: "1015411844496", appId: "1:1015411844496:web:bae327949dd143a7f93f15", measurementId: "G-P8X7VMZVH4" };
         const gameId = firebaseConfig.projectId;
         const app = initializeApp(firebaseConfig);
@@ -153,44 +152,40 @@
             '000': 'The Eagle', '001': 'Aarav', '002': 'Priya', '003': 'Rohan', '004': 'Sneha', '005': 'Vikram (Admin)',
         };
 
-        // --- Game State ---
-        let currentUser = null, currentUserId = null, isAdmin = false, isSessionActive = false;
+        let currentUser = null, currentUserId = null, isAdmin = false;
         let localListeners = [];
 
-        // --- DOM Elements ---
         const usnSelect = document.getElementById('usn-select'), joinBtn = document.getElementById('join-btn'), loginModal = document.getElementById('login-modal'), authStatus = document.getElementById('auth-status'), loginStatusText = document.getElementById('login-status-text');
         const adminControls = document.getElementById('admin-controls'), endSessionBtn = document.getElementById('end-session-btn');
-        const lobbyUi = document.getElementById('lobby-ui'), lobbyPlayerGraph = document.getElementById('lobby-player-graph'), startGameBtn = document.getElementById('start-game-btn');
+        const lobbyUi = document.getElementById('lobby-ui'), startGameBtn = document.getElementById('start-game-btn');
         const newGameBtn = document.getElementById('new-game-btn');
         const playerCountDisplay = document.getElementById('player-count-display'), playerCount = document.getElementById('player-count');
         const cameraModal = document.getElementById('camera-modal');
         const gameUi = document.getElementById('game-ui');
         const playerNameEl = document.getElementById('player-name');
-
+        
+        // --- All Function Definitions ---
+        
         function populateUSNSelect() {
             usnSelect.innerHTML = '';
-
-            const adminOption000 = document.createElement('option');
-            adminOption000.value = '000';
-            adminOption000.textContent = '000 (Admin)';
-            usnSelect.appendChild(adminOption000);
-
-            const adminOption005 = document.createElement('option');
-            adminOption005.value = '005';
-            adminOption005.textContent = '005 (Admin)';
-            usnSelect.appendChild(adminOption005);
-
+            const adminOptions = ['000', '005'];
+            adminOptions.forEach(val => {
+                const opt = document.createElement('option');
+                opt.value = val;
+                opt.textContent = `${val} (Admin)`;
+                usnSelect.appendChild(opt);
+            });
             for (let i = 1; i <= 100; i++) {
-                if (i === 5) continue;
+                const valStr = i.toString().padStart(3, '0');
+                if (adminOptions.includes(valStr)) continue;
                 const o = document.createElement('option');
-                o.value = i.toString().padStart(3, '0');
-                o.textContent = o.value;
+                o.value = valStr;
+                o.textContent = valStr;
                 usnSelect.appendChild(o);
             }
         }
 
-        // --- Session Management ---
-        async function resetGameSession() {
+        async function resetGameSession(startSession = false) {
             const playersCollection = collection(db, `games/${gameId}/players`);
             const playerDocs = await getDocs(playersCollection);
             const batch = writeBatch(db);
@@ -204,16 +199,13 @@
             } while (perfectPath.length < 4);
             
             const configRef = doc(db, `games/${gameId}/config/main`);
-            await setDoc(configRef, { secretNumber, perfectPath, winnerId: null, gameStarted: false, chosenUSNs: [] });
+            await setDoc(configRef, { secretNumber, perfectPath, winnerId: null, gameStarted: false, chosenUSNs: [], sessionActive: startSession });
         }
 
         function listenForSession() {
-            // FIXED: Instead of a fixed doc ID, we query for any player with the session admin's USN.
-            const playersRef = collection(db, `games/${gameId}/players`);
-            const sessionQuery = query(playersRef, where("usn", "==", "1SB23CS005"));
-
-            const unsubscribe = onSnapshot(sessionQuery, (snapshot) => {
-                isSessionActive = !snapshot.empty; // Session is active if the query finds at least one admin 005.
+            const configRef = doc(db, `games/${gameId}/config/main`);
+            const unsubscribe = onSnapshot(configRef, (docSnap) => {
+                const isSessionActive = docSnap.exists() && docSnap.data().sessionActive;
                 if (isSessionActive) {
                     loginStatusText.textContent = "Session is active. Select your USN.";
                     joinBtn.disabled = false;
@@ -228,17 +220,16 @@
             localListeners.push(unsubscribe);
         }
 
-        // --- Join Logic ---
         async function handleJoinRequest() {
             const usnValue = usnSelect.value;
             isAdmin = (usnValue === '000' || usnValue === '005');
             if (isAdmin) {
                 const password = prompt("Enter Admin Password:");
                 if (password === "ak04@eagle") {
-                    let photoUrl = 'eagle.png';
-                    // Use a predictable ID for the session admin so they can be easily found and deleted.
-                    let playerId = usnValue === '005' ? 'admin_005' : currentUserId;
-                    await joinGame(playerId, photoUrl, true);
+                    if (usnValue === '005') {
+                        await resetGameSession(true);
+                    }
+                    await joinGame(currentUserId, 'eagle.png', true);
                 } else { alert("Incorrect password."); }
             } else {
                 startCamera();
@@ -278,7 +269,6 @@
             }
         }
         
-        // --- Game Flow ---
         async function startGame() {
             startGameBtn.disabled = true;
             const configRef = doc(db, `games/${gameId}/config/main`);
@@ -290,13 +280,6 @@
             });
             await batch.commit();
             await updateDoc(configRef, { gameStarted: true });
-        }
-
-        // --- Listeners & Init ---
-        function init() {
-            populateUSNSelect();
-            populateNumberGrid();
-            initializeAuth();
         }
 
         async function initializeAuth() {
@@ -317,14 +300,13 @@
         function attachMainListeners() {
             joinBtn.addEventListener('click', handleJoinRequest);
             endSessionBtn.addEventListener('click', async () => {
-                if (confirm("Are you sure you want to end the session for ALL players and reset the game?")) {
-                    await deleteDoc(doc(db, `games/${gameId}/players/admin_005`));
-                    await resetGameSession();
+                if (confirm("Are you sure you want to end the session for ALL players? This will delete all data.")) {
+                    await resetGameSession(false);
                 }
             });
             newGameBtn.addEventListener('click', async () => {
                 if(confirm("This will start a new game round, clearing all scores. Continue?")) {
-                    await resetGameSession();
+                    await resetGameSession(true);
                 }
             });
             startGameBtn.addEventListener('click', startGame);
@@ -335,7 +317,6 @@
             guessInputEl.addEventListener('keyup', (e) => { if (e.key === 'Enter') { const val = parseInt(guessInputEl.value); if (!isNaN(val)) { processGuess(val); guessInputEl.value = ''; } } });
         }
         
-        // --- Full definitions for all other functions ---
         function calculateBinarySearchPath(target, min, max) { let path = [], low = min, high = max; while (low <= high) { let mid = Math.floor((low + high) / 2); path.push(mid); if (mid === target) return path; if (mid < target) low = mid + 1; else high = mid - 1; } return path; }
         async function startCamera() { loginModal.classList.add('hidden'); cameraModal.classList.remove('hidden'); try { const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: false }); const videoFeed = document.getElementById('video-feed'); videoFeed.srcObject = stream; document.getElementById('camera-status').textContent = "Align your face and take a photo."; } catch (err) { document.getElementById('camera-status').textContent = "Camera access denied."; document.getElementById('take-photo-btn').disabled = true; } }
         function takePhoto() { const videoFeed = document.getElementById('video-feed'); const photoCanvas = document.getElementById('photo-canvas'); const context = photoCanvas.getContext('2d'); photoCanvas.width = videoFeed.videoWidth; photoCanvas.height = videoFeed.videoHeight; const localPhotoDataUrl = photoCanvas.toDataURL('image/jpeg', 0.8); const stream = videoFeed.srcObject; if (stream) { stream.getTracks().forEach(track => track.stop()); videoFeed.srcObject = null; } document.getElementById('camera-modal').classList.add('hidden'); joinGame(currentUserId, localPhotoDataUrl, false); }
@@ -345,7 +326,7 @@
         function checkGlobalWinner(players) { const winnerModal = document.getElementById('winner-modal'); const winnerInfo = document.getElementById('winner-info'); const gameEnded = players.every(p => p.isWinner || p.isEliminated); if (!gameEnded) return; if (winnerModal.dataset.shown) return; winnerModal.dataset.shown = 'true'; const winners = players.filter(p => p.isWinner); if (winners.length === 0) { winnerInfo.innerHTML = `<p class="text-xl text-gray-400">No one guessed the number in time!</p>`; } else { const perfectWinners = winners.filter(p => p.isPerfect); const finalWinners = (perfectWinners.length > 0 ? perfectWinners : winners).sort((a,b) => a.timeTaken - b.timeTaken); const topWinner = finalWinners[0]; const winnerPhotoSrc = (topWinner.usn === '1SB23CS000' || topWinner.usn === '1SB23CS005') ? 'eagle.png' : topWinner.photoURL; const frameClass = topWinner.isPerfect ? 'winner-photo-frame-perfect' : 'winner-photo-frame-normal'; winnerInfo.innerHTML = `<img src="${winnerPhotoSrc}" class="${frameClass} w-32 h-32 rounded-full object-cover mb-4"><p class="text-2xl font-semibold">${topWinner.name}</p><p class="text-gray-400">${topWinner.usn}</p><p class="text-5xl font-bold my-2 text-green-300">${topWinner.timeTaken.toFixed(2)}s</p>${topWinner.isPerfect ? '<p class="text-yellow-400 font-semibold text-xl">🏆 Flawless Victory! 🏆</p>' : ''}`; } setTimeout(() => { confetti({ particleCount: 150, spread: 90, origin: { y: 0.6 } }); winnerModal.classList.remove('hidden'); }, 7000); }
         function handleTimerAndElimination(players) { const gameTimer = document.getElementById('game-timer'); const feedback = document.getElementById('feedback'); if(gameTimerInterval) clearInterval(gameTimerInterval); const me = players.find(p => p.id === currentUserId); if(!me || me.isWinner || me.isEliminated || !me.startTime) { gameTimer.textContent = '---'; return; } gameTimerInterval = setInterval(async () => { const elapsed = (new Date() - me.startTime.toDate()) / 1000; const timeLeft = Math.max(0, 100 - elapsed); gameTimer.textContent = Math.ceil(timeLeft); if (timeLeft <= 0) { clearInterval(gameTimerInterval); feedback.textContent = "Time's up! You've been eliminated."; if(!isAdmin) { document.getElementById('guess-input').disabled = true; document.getElementById('guess-btn').disabled = true; } await updateDoc(doc(db, `games/${gameId}/players/${currentUserId}`), { isEliminated: true }); } }, 1000); }
         async function processWin(finalGuesses) { const playerDocSnap = await getDoc(doc(db, `games/${gameId}/players/${currentUserId}`)); const startTime = playerDocSnap.data().startTime.toDate(); const timeTaken = (new Date() - startTime) / 1000; const gameConfigSnap = await getDoc(doc(db, `games/${gameId}/config/main`)); const perfectPath = gameConfigSnap.data().perfectPath || []; const isPerfect = finalGuesses.length === perfectPath.length && finalGuesses.every((g, i) => g.guess === perfectPath[i]); await updateDoc(doc(db, `games/${gameId}/players/${currentUserId}`), { guesses: finalGuesses, timeTaken, isWinner: true, isPerfect }); }
-        async function processGuess(guess) { if (isProcessingGuess || isNaN(guess)) return; isProcessingGuess = true; const gameDocSnap = await getDoc(doc(db, `games/${gameId}/config/main`)); const { secretNumber, perfectPath } = gameDocSnap.data(); const playerDocSnap = await getDoc(doc(db, `games/${gameId}/players/${currentUserId}`)); const player = playerDocSnap.data(); if (!player || player.isWinner || player.isEliminated) { isProcessingGuess = false; return; } const currentStep = player.guesses.length; const isGolden = perfectPath && guess === perfectPath[currentStep]; const newGuesses = [...player.guesses, { guess, isGolden }]; if (guess === secretNumber) { document.getElementById('feedback').textContent = "🎉 Correct! You've found the number! 🎉"; await processWin(newGuesses); } else { const feedbackType = guess < secretNumber ? 'higher' : 'lower'; document.getElementById('feedback').textContent = `${feedbackType.charAt(0).toUpperCase() + feedbackType.slice(1)} than ${guess}`; if (isAdmin) { let localLow = 1, localHigh = 100; if (feedbackType === 'higher') localLow = Math.max(localLow, guess + 1); else localHigh = Math.min(localHigh, guess - 1); document.getElementById('low-val').textContent = localLow; document.getElementById('high-val').textContent = localHigh; document.getElementById('mid-val').textContent = Math.floor((localLow + localHigh) / 2); document.querySelectorAll('.number-circle').forEach(c => { const n = parseInt(c.dataset.number); let d = false; if (feedbackType === 'higher') { if (n <= guess) d = true; } else if (feedbackType === 'lower') { if (n >= guess) d = true; } if (d) c.classList.add('opacity-20'); }); } await updateDoc(doc(db, `games/${gameId}/players/${currentUserId}`), { guesses: newGuesses }); } isProcessingGuess = false; }
+        async function processGuess(guess) { let isProcessingGuess = false; if (isProcessingGuess || isNaN(guess)) return; isProcessingGuess = true; const gameDocSnap = await getDoc(doc(db, `games/${gameId}/config/main`)); const { secretNumber, perfectPath } = gameDocSnap.data(); const playerDocSnap = await getDoc(doc(db, `games/${gameId}/players/${currentUserId}`)); const player = playerDocSnap.data(); if (!player || player.isWinner || player.isEliminated) { isProcessingGuess = false; return; } const currentStep = player.guesses.length; const isGolden = perfectPath && guess === perfectPath[currentStep]; const newGuesses = [...player.guesses, { guess, isGolden }]; if (guess === secretNumber) { document.getElementById('feedback').textContent = "🎉 Correct! You've found the number! 🎉"; await processWin(newGuesses); } else { const feedbackType = guess < secretNumber ? 'higher' : 'lower'; document.getElementById('feedback').textContent = `${feedbackType.charAt(0).toUpperCase() + feedbackType.slice(1)} than ${guess}`; if (isAdmin) { let localLow = 1, localHigh = 100; if (feedbackType === 'higher') localLow = Math.max(localLow, guess + 1); else localHigh = Math.min(localHigh, guess - 1); document.getElementById('low-val').textContent = localLow; document.getElementById('high-val').textContent = localHigh; document.getElementById('mid-val').textContent = Math.floor((localLow + localHigh) / 2); document.querySelectorAll('.number-circle').forEach(c => { const n = parseInt(c.dataset.number); let d = false; if (feedbackType === 'higher') { if (n <= guess) d = true; } else if (feedbackType === 'lower') { if (n >= guess) d = true; } if (d) c.classList.add('opacity-20'); }); } await updateDoc(doc(db, `games/${gameId}/players/${currentUserId}`), { guesses: newGuesses }); } isProcessingGuess = false; }
         
         init();
     </script>
