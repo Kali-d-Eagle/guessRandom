@@ -206,12 +206,9 @@
                 const isSessionActive = docSnap.exists() && docSnap.data().sessionActive;
                 if (isSessionActive) {
                     loginStatusText.textContent = "Session is active. Select your USN.";
-                    joinBtn.disabled = false;
                 } else {
                     loginStatusText.textContent = "Waiting for Admin (005) to start a session...";
-                    joinBtn.disabled = true;
-                    // FIXED: Only reload if the user is *not* on the login screen.
-                    if (loginModal.classList.contains('hidden')) {
+                    if (!loginModal.classList.contains('hidden')) {
                         alert("The admin has ended the session.");
                         location.reload();
                     }
@@ -363,6 +360,7 @@
                     currentUser = user; currentUserId = user.uid;
                     authStatus.textContent = "Connected.";
                     authStatus.classList.replace('text-gray-500', 'text-green-400');
+                    joinBtn.disabled = false; // Enable join button once connected
                     localListeners.forEach(unsub => unsub());
                     localListeners = [];
                     listenForSession();
