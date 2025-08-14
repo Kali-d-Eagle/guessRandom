@@ -48,7 +48,7 @@
         <div id="login-modal" class="fixed inset-0 z-50 flex items-center justify-center modal-backdrop">
             <div class="bg-gray-800 rounded-2xl shadow-2xl p-6 sm:p-8 w-full max-w-sm text-center border border-gray-700">
                 <h2 class="text-3xl font-bold mb-2 text-cyan-400">Join the Game</h2>
-                <p id="login-status-text" class="text-gray-400 mb-6">Select your USN to begin.</p>
+                <p id="login-status-text" class="text-gray-400 mb-6 h-10 flex items-center justify-center">Select your USN to begin.</p>
                 <div class="mb-6">
                     <div class="flex items-center bg-gray-900 border border-gray-600 rounded-lg">
                         <span class="text-gray-400 pl-4">1SB23CS</span>
@@ -170,7 +170,6 @@
         function populateUSNSelect() {
             usnSelect.innerHTML = ''; // Clear existing options first
 
-            // Add admins at the top
             const adminOption000 = document.createElement('option');
             adminOption000.value = '000';
             adminOption000.textContent = '000 (Admin)';
@@ -181,9 +180,8 @@
             adminOption005.textContent = '005 (Admin)';
             usnSelect.appendChild(adminOption005);
 
-            // Add regular users
             for (let i = 1; i <= 100; i++) {
-                if (i === 5) continue; // Skip admin 005 as it's already added
+                if (i === 5) continue;
                 const o = document.createElement('option');
                 o.value = i.toString().padStart(3, '0');
                 o.textContent = o.value;
@@ -201,7 +199,7 @@
 
             let secretNumber, perfectPath;
             do {
-                secretNumber = Math.floor(Math.random() * (100 - 1 + 1)) + 1;
+                secretNumber = Math.floor(Math.random() * 100) + 1;
                 perfectPath = calculateBinarySearchPath(secretNumber, 1, 100);
             } while (perfectPath.length < 4);
             
@@ -210,6 +208,7 @@
         }
 
         function listenForSession() {
+            // This function checks if Admin 005 is logged in, which defines an active session.
             const sessionAdminRef = doc(db, `games/${gameId}/players/admin_005`);
             const unsubscribe = onSnapshot(sessionAdminRef, (docSnap) => {
                 isSessionActive = docSnap.exists();
@@ -219,9 +218,10 @@
                 } else {
                     loginStatusText.textContent = "Waiting for Admin (005) to start a session...";
                     joinBtn.disabled = true;
-                    if (!loginModal.classList.contains('hidden')) return;
-                    alert("The admin has ended the session.");
-                    location.reload();
+                    if (loginModal.classList.contains('hidden')) {
+                        alert("The admin has ended the session.");
+                        location.reload();
+                    }
                 }
             });
             localListeners.push(unsubscribe);
@@ -336,14 +336,14 @@
         // --- Full definitions for all other functions ---
         function calculateBinarySearchPath(target, min, max) { let path = [], low = min, high = max; while (low <= high) { let mid = Math.floor((low + high) / 2); path.push(mid); if (mid === target) return path; if (mid < target) low = mid + 1; else high = mid - 1; } return path; }
         async function startCamera() { loginModal.classList.add('hidden'); cameraModal.classList.remove('hidden'); try { const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: false }); const videoFeed = document.getElementById('video-feed'); videoFeed.srcObject = stream; document.getElementById('camera-status').textContent = "Align your face and take a photo."; } catch (err) { document.getElementById('camera-status').textContent = "Camera access denied."; document.getElementById('take-photo-btn').disabled = true; } }
-        function takePhoto() { const videoFeed = document.getElementById('video-feed'); const photoCanvas = document.getElementById('photo-canvas'); const context = photoCanvas.getContext('2d'); photoCanvas.width = videoFeed.videoWidth; photoCanvas.height = videoFeed.videoHeight; context.drawImage(videoFeed, 0, 0, photoCanvas.width, photoCanvas.height); const localPhotoDataUrl = photoCanvas.toDataURL('image/jpeg', 0.8); const stream = videoFeed.srcObject; if (stream) { stream.getTracks().forEach(track => track.stop()); videoFeed.srcObject = null; } document.getElementById('camera-modal').classList.add('hidden'); joinGame(currentUserId, localPhotoDataUrl, false); }
+        function takePhoto() { const videoFeed = document.getElementById('video-feed'); const photoCanvas = document.getElementById('photo-canvas'); const context = photoCanvas.getContext('2d'); photoCanvas.width = videoFeed.videoWidth; photoCanvas.height = videoFeed.videoHeight; const localPhotoDataUrl = photoCanvas.toDataURL('image/jpeg', 0.8); const stream = videoFeed.srcObject; if (stream) { stream.getTracks().forEach(track => track.stop()); videoFeed.srcObject = null; } document.getElementById('camera-modal').classList.add('hidden'); joinGame(currentUserId, localPhotoDataUrl, false); }
         function populateNumberGrid() { const numberGrid = document.getElementById('number-grid'); numberGrid.innerHTML = ''; for (let i = 1; i <= 100; i++) { const circle = document.createElement('div'); circle.className = 'number-circle w-8 h-8 rounded-full flex items-center justify-center text-xs font-semibold bg-cyan-700'; circle.textContent = i; circle.dataset.number = i; circle.addEventListener('click', (e) => { if (!isAdmin || isProcessingGuess) return; processGuess(parseInt(e.currentTarget.dataset.number)); }); numberGrid.appendChild(circle); } }
         function renderLobbyGraph(players) { const lobbyPlayerGraph = document.getElementById('lobby-player-graph'); lobbyPlayerGraph.innerHTML = ''; players.forEach(player => { const photoSrc = (player.usn === '1SB23CS000' || player.usn === '1SB23CS005') ? 'eagle.png' : player.photoURL; const card = document.createElement('div'); card.className = 'flex flex-col items-center'; card.innerHTML = `<img src="${photoSrc}" class="w-16 h-16 rounded-full object-cover border-2 border-gray-500"><p class="text-xs font-semibold mt-1 truncate w-20 text-center">${player.name}</p>`; lobbyPlayerGraph.appendChild(card); }); }
         function renderPlayerGraph(players) { const playerGraph = document.getElementById('player-graph'); playerGraph.innerHTML = ''; players.sort((a, b) => (a.startTime?.seconds || 0) - (b.startTime?.seconds || 0)); players.forEach(player => { const card = document.createElement('div'); card.className = 'player-card flex flex-col items-center'; if(player.isEliminated) card.classList.add('opacity-40'); const photoSrc = (player.usn === '1SB23CS000' || player.usn === '1SB23CS005') ? 'eagle.png' : player.photoURL; const timeTaken = player.timeTaken; const maxStripHeight = 128, minStripHeight = 32; let stripHeight = maxStripHeight; if(timeTaken) { stripHeight = Math.max(minStripHeight, maxStripHeight / (timeTaken / 10 + 1)); } card.innerHTML = `<img src="${photoSrc}" class="w-12 h-12 sm:w-16 sm:h-16 rounded-full object-cover border-2 ${player.isWinner ? 'border-amber-400' : 'border-gray-600'} mb-2"><div class="score-strip-container w-6 sm:w-8 bg-gray-700 rounded-md flex flex-col-reverse overflow-hidden" style="height: ${player.isWinner ? stripHeight : maxStripHeight}px;">${Array.from({ length: 10 }).map((_, i) => { const guess = player.guesses[i]; let colorClass = 'bg-gray-700'; if (guess) colorClass = guess.isGolden ? 'bg-yellow-400' : 'bg-cyan-600'; return `<div class="flex-1 ${colorClass}"></div>`; }).join('')}</div><p class="text-xs font-semibold mt-1 truncate w-20 text-center">${player.name}</p><p class="text-xs text-gray-400">${player.isWinner ? `${timeTaken.toFixed(1)}s` : player.isEliminated ? 'Eliminated' : ''}</p>`; playerGraph.appendChild(card); }); }
         function checkGlobalWinner(players) { const winnerModal = document.getElementById('winner-modal'); const winnerInfo = document.getElementById('winner-info'); const gameEnded = players.every(p => p.isWinner || p.isEliminated); if (!gameEnded) return; if (winnerModal.dataset.shown) return; winnerModal.dataset.shown = 'true'; const winners = players.filter(p => p.isWinner); if (winners.length === 0) { winnerInfo.innerHTML = `<p class="text-xl text-gray-400">No one guessed the number in time!</p>`; } else { const perfectWinners = winners.filter(p => p.isPerfect); const finalWinners = (perfectWinners.length > 0 ? perfectWinners : winners).sort((a,b) => a.timeTaken - b.timeTaken); const topWinner = finalWinners[0]; const winnerPhotoSrc = (topWinner.usn === '1SB23CS000' || topWinner.usn === '1SB23CS005') ? 'eagle.png' : topWinner.photoURL; const frameClass = topWinner.isPerfect ? 'winner-photo-frame-perfect' : 'winner-photo-frame-normal'; winnerInfo.innerHTML = `<img src="${winnerPhotoSrc}" class="${frameClass} w-32 h-32 rounded-full object-cover mb-4"><p class="text-2xl font-semibold">${topWinner.name}</p><p class="text-gray-400">${topWinner.usn}</p><p class="text-5xl font-bold my-2 text-green-300">${topWinner.timeTaken.toFixed(2)}s</p>${topWinner.isPerfect ? '<p class="text-yellow-400 font-semibold text-xl">🏆 Flawless Victory! 🏆</p>' : ''}`; } setTimeout(() => { confetti({ particleCount: 150, spread: 90, origin: { y: 0.6 } }); winnerModal.classList.remove('hidden'); }, 7000); }
         function handleTimerAndElimination(players) { const gameTimer = document.getElementById('game-timer'); const feedback = document.getElementById('feedback'); if(gameTimerInterval) clearInterval(gameTimerInterval); const me = players.find(p => p.id === currentUserId); if(!me || me.isWinner || me.isEliminated || !me.startTime) { gameTimer.textContent = '---'; return; } gameTimerInterval = setInterval(async () => { const elapsed = (new Date() - me.startTime.toDate()) / 1000; const timeLeft = Math.max(0, 100 - elapsed); gameTimer.textContent = Math.ceil(timeLeft); if (timeLeft <= 0) { clearInterval(gameTimerInterval); feedback.textContent = "Time's up! You've been eliminated."; if(!isAdmin) { document.getElementById('guess-input').disabled = true; document.getElementById('guess-btn').disabled = true; } await updateDoc(doc(db, `games/${gameId}/players/${currentUserId}`), { isEliminated: true }); } }, 1000); }
         async function processWin(finalGuesses) { const playerDocSnap = await getDoc(doc(db, `games/${gameId}/players/${currentUserId}`)); const startTime = playerDocSnap.data().startTime.toDate(); const timeTaken = (new Date() - startTime) / 1000; const gameConfigSnap = await getDoc(doc(db, `games/${gameId}/config/main`)); const perfectPath = gameConfigSnap.data().perfectPath || []; const isPerfect = finalGuesses.length === perfectPath.length && finalGuesses.every((g, i) => g.guess === perfectPath[i]); await updateDoc(doc(db, `games/${gameId}/players/${currentUserId}`), { guesses: finalGuesses, timeTaken, isWinner: true, isPerfect }); }
-        async function processGuess(guess) { if (isProcessingGuess || isNaN(guess)) return; isProcessingGuess = true; const gameDocSnap = await getDoc(doc(db, `games/${gameId}/config/main`)); const { secretNumber, perfectPath } = gameDocSnap.data(); const playerDocSnap = await getDoc(doc(db, `games/${gameId}/players/${currentUserId}`)); const player = playerDocSnap.data(); if (!player || player.isWinner || player.isEliminated) { isProcessingGuess = false; return; } const currentStep = player.guesses.length; const isGolden = perfectPath && guess === perfectPath[currentStep]; const newGuesses = [...player.guesses, { guess, isGolden }]; if (guess === secretNumber) { document.getElementById('feedback').textContent = "🎉 Correct! You've found the number! 🎉"; await processWin(newGuesses); } else { const feedbackType = guess < secretNumber ? 'higher' : 'lower'; document.getElementById('feedback').textContent = `${feedbackType.charAt(0).toUpperCase() + feedbackType.slice(1)} than ${guess}`; if (isAdmin) { if (feedbackType === 'higher') localLow = Math.max(localLow, guess + 1); else localHigh = Math.min(localHigh, guess - 1); document.getElementById('low-val').textContent = localLow; document.getElementById('high-val').textContent = localHigh; document.getElementById('mid-val').textContent = Math.floor((localLow + localHigh) / 2); document.querySelectorAll('.number-circle').forEach(c => { const n = parseInt(c.dataset.number); let d = false; if (feedbackType === 'higher') { if (n <= guess) d = true; } else if (feedbackType === 'lower') { if (n >= guess) d = true; } if (d) c.classList.add('opacity-20'); }); } await updateDoc(doc(db, `games/${gameId}/players/${currentUserId}`), { guesses: newGuesses }); } isProcessingGuess = false; }
+        async function processGuess(guess) { if (isProcessingGuess || isNaN(guess)) return; isProcessingGuess = true; const gameDocSnap = await getDoc(doc(db, `games/${gameId}/config/main`)); const { secretNumber, perfectPath } = gameDocSnap.data(); const playerDocSnap = await getDoc(doc(db, `games/${gameId}/players/${currentUserId}`)); const player = playerDocSnap.data(); if (!player || player.isWinner || player.isEliminated) { isProcessingGuess = false; return; } const currentStep = player.guesses.length; const isGolden = perfectPath && guess === perfectPath[currentStep]; const newGuesses = [...player.guesses, { guess, isGolden }]; if (guess === secretNumber) { document.getElementById('feedback').textContent = "🎉 Correct! You've found the number! 🎉"; await processWin(newGuesses); } else { const feedbackType = guess < secretNumber ? 'higher' : 'lower'; document.getElementById('feedback').textContent = `${feedbackType.charAt(0).toUpperCase() + feedbackType.slice(1)} than ${guess}`; if (isAdmin) { let localLow = 1, localHigh = 100; if (feedbackType === 'higher') localLow = Math.max(localLow, guess + 1); else localHigh = Math.min(localHigh, guess - 1); document.getElementById('low-val').textContent = localLow; document.getElementById('high-val').textContent = localHigh; document.getElementById('mid-val').textContent = Math.floor((localLow + localHigh) / 2); document.querySelectorAll('.number-circle').forEach(c => { const n = parseInt(c.dataset.number); let d = false; if (feedbackType === 'higher') { if (n <= guess) d = true; } else if (feedbackType === 'lower') { if (n >= guess) d = true; } if (d) c.classList.add('opacity-20'); }); } await updateDoc(doc(db, `games/${gameId}/players/${currentUserId}`), { guesses: newGuesses }); } isProcessingGuess = false; }
         
         init();
     </script>
