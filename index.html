@@ -140,7 +140,7 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-app.js";
         import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
-        import { getFirestore, doc, setDoc, onSnapshot, collection, writeBatch, getDoc, query, serverTimestamp, updateDoc, runTransaction, arrayUnion, deleteDoc } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
+        import { getFirestore, doc, setDoc, onSnapshot, collection, writeBatch, getDoc, query, serverTimestamp, updateDoc, runTransaction, arrayUnion, deleteDoc, where } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
 
         // --- Firebase Config & Init ---
         const firebaseConfig = { apiKey: "AIzaSyCXGaRmvEzMU0S50hcqYSz078qcmjDKfaE", authDomain: "guessrandom-eagle.firebaseapp.com", projectId: "guessrandom-eagle", storageBucket: "guessrandom-eagle.firebasestorage.app", messagingSenderId: "1015411844496", appId: "1:1015411844496:web:bae327949dd143a7f93f15", measurementId: "G-P8X7VMZVH4" };
@@ -168,7 +168,7 @@
         const playerNameEl = document.getElementById('player-name');
 
         function populateUSNSelect() {
-            usnSelect.innerHTML = ''; // Clear existing options first
+            usnSelect.innerHTML = '';
 
             const adminOption000 = document.createElement('option');
             adminOption000.value = '000';
@@ -208,20 +208,21 @@
         }
 
         function listenForSession() {
-            // This function checks if Admin 005 is logged in, which defines an active session.
-            const sessionAdminRef = doc(db, `games/${gameId}/players/admin_005`);
-            const unsubscribe = onSnapshot(sessionAdminRef, (docSnap) => {
-                isSessionActive = docSnap.exists();
+            // FIXED: Instead of a fixed doc ID, we query for any player with the session admin's USN.
+            const playersRef = collection(db, `games/${gameId}/players`);
+            const sessionQuery = query(playersRef, where("usn", "==", "1SB23CS005"));
+
+            const unsubscribe = onSnapshot(sessionQuery, (snapshot) => {
+                isSessionActive = !snapshot.empty; // Session is active if the query finds at least one admin 005.
                 if (isSessionActive) {
                     loginStatusText.textContent = "Session is active. Select your USN.";
                     joinBtn.disabled = false;
                 } else {
                     loginStatusText.textContent = "Waiting for Admin (005) to start a session...";
                     joinBtn.disabled = true;
-                    if (loginModal.classList.contains('hidden')) {
-                        alert("The admin has ended the session.");
-                        location.reload();
-                    }
+                    if (!loginModal.classList.contains('hidden')) return;
+                    alert("The admin has ended the session.");
+                    location.reload();
                 }
             });
             localListeners.push(unsubscribe);
@@ -235,8 +236,9 @@
                 const password = prompt("Enter Admin Password:");
                 if (password === "ak04@eagle") {
                     let photoUrl = 'eagle.png';
-                    let adminId = usnValue === '005' ? 'admin_005' : currentUserId;
-                    await joinGame(adminId, photoUrl, true);
+                    // Use a predictable ID for the session admin so they can be easily found and deleted.
+                    let playerId = usnValue === '005' ? 'admin_005' : currentUserId;
+                    await joinGame(playerId, photoUrl, true);
                 } else { alert("Incorrect password."); }
             } else {
                 startCamera();
