@@ -208,7 +208,8 @@
                     loginStatusText.textContent = "Session is active. Select your USN.";
                 } else {
                     loginStatusText.textContent = "Waiting for Admin (005) to start a session...";
-                    if (!loginModal.classList.contains('hidden')) {
+                    // FIXED: This now correctly checks if the user is already past the login screen
+                    if (loginModal.classList.contains('hidden')) {
                         alert("The admin has ended the session.");
                         location.reload();
                     }
@@ -360,7 +361,7 @@
                     currentUser = user; currentUserId = user.uid;
                     authStatus.textContent = "Connected.";
                     authStatus.classList.replace('text-gray-500', 'text-green-400');
-                    joinBtn.disabled = false; // Enable join button once connected
+                    joinBtn.disabled = false;
                     localListeners.forEach(unsub => unsub());
                     localListeners = [];
                     listenForSession();
