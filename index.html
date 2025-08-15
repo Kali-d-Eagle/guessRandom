@@ -32,16 +32,19 @@
 <body class="bg-gray-900 text-white flex items-center justify-center min-h-screen p-2 sm:p-4 overflow-hidden">
 
     <div id="app-container" class="w-full max-w-7xl mx-auto">
+        <!-- Live Player Count -->
         <div id="player-count-display" class="hidden fixed top-4 left-4 bg-gray-800/50 backdrop-blur-sm text-white py-2 px-4 rounded-lg text-lg font-bold z-[60]">
             Players: <span id="player-count">0</span>
         </div>
         
+        <!-- Admin Controls -->
         <div id="admin-controls" class="hidden fixed top-4 right-4 z-[60]">
              <button id="end-session-btn" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg text-sm transition duration-300">
                 End Session & Reset All
             </button>
         </div>
 
+        <!-- Step 1: Login Modal -->
         <div id="login-modal" class="fixed inset-0 z-50 flex items-center justify-center modal-backdrop">
             <div class="bg-gray-800 rounded-2xl shadow-2xl p-6 sm:p-8 w-full max-w-sm text-center border border-gray-700">
                 <h2 class="text-3xl font-bold mb-2 text-cyan-400">Join the Game</h2>
@@ -49,7 +52,9 @@
                 <div class="mb-6">
                     <div class="flex items-center bg-gray-900 border border-gray-600 rounded-lg">
                         <span class="text-gray-400 pl-4">1SB23CS</span>
-                        <select id="usn-select" class="bg-gray-900 text-white p-3 rounded-r-lg w-full focus:outline-none focus:ring-2 focus:ring-cyan-500"></select>
+                        <select id="usn-select" class="bg-gray-900 text-white p-3 rounded-r-lg w-full focus:outline-none focus:ring-2 focus:ring-cyan-500">
+                           <!-- Options will be populated by JS -->
+                        </select>
                     </div>
                 </div>
                 <button id="join-btn" class="w-full bg-cyan-500 hover:bg-cyan-600 text-white font-bold py-3 px-4 rounded-lg text-lg transition duration-300" disabled>
@@ -59,6 +64,7 @@
             </div>
         </div>
         
+        <!-- Step 2: Camera Modal -->
         <div id="camera-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center modal-backdrop">
              <div class="bg-gray-800 rounded-2xl shadow-2xl p-6 sm:p-8 w-full max-w-sm text-center border border-gray-700">
                 <h2 class="text-3xl font-bold mb-4 text-cyan-400">Take a Selfie</h2>
@@ -73,6 +79,7 @@
             </div>
         </div>
         
+        <!-- Lobby UI -->
         <div id="lobby-ui" class="hidden text-center">
             <h2 class="text-3xl font-bold text-cyan-400 mb-4">Lobby</h2>
             <p class="text-gray-400 text-lg mb-8">Waiting for the admin to start the game...</p>
@@ -82,6 +89,7 @@
             </button>
         </div>
 
+        <!-- Main Game UI -->
         <div id="game-ui" class="hidden">
              <div class="text-center mb-6">
                 <h1 class="text-3xl sm:text-4xl font-extrabold tracking-tight">
@@ -144,9 +152,8 @@
             '000': 'The Eagle', '001': 'Aarav', '002': 'Priya', '003': 'Rohan', '004': 'Sneha', '005': 'Vikram (Admin)',
         };
 
-        let currentUser = null, currentUserId = null, isAdmin = false, isDemoUser = false;
+        let currentUser = null, currentUserId = null, isAdmin = false;
         let localListeners = [];
-        let mainGameTimer = null;
 
         const usnSelect = document.getElementById('usn-select'), joinBtn = document.getElementById('join-btn'), loginModal = document.getElementById('login-modal'), authStatus = document.getElementById('auth-status'), loginStatusText = document.getElementById('login-status-text');
         const adminControls = document.getElementById('admin-controls'), endSessionBtn = document.getElementById('end-session-btn');
@@ -191,10 +198,6 @@
             
             const configRef = doc(db, `games/${gameId}/config/main`);
             await setDoc(configRef, { secretNumber, perfectPath, winnerId: null, gameStarted: false, chosenUSNs: [], sessionActive: startSession });
-            
-            if (!startSession) {
-                location.reload();
-            }
         }
 
         function listenForSession() {
@@ -217,31 +220,23 @@
         async function handleJoinRequest() {
             const usnValue = usnSelect.value;
             isAdmin = (usnValue === '000' || usnValue === '005');
-            isDemoUser = (usnValue === '000');
 
-            if (isDemoUser) {
+            if (isAdmin) {
                 const password = prompt("Enter Admin Password:");
                 if (password === "ak04@eagle") {
-                    startDemoMode();
-                } else { alert("Incorrect password."); }
-                return;
-            }
-
-            if (usnValue === '005') {
-                 const password = prompt("Enter Admin Password:");
-                if (password === "ak04@eagle") {
-                    await resetGameSession(true);
+                    if (usnValue === '005') {
+                        await resetGameSession(true);
+                    }
                     await joinGame(currentUserId, 'https://placehold.co/100x100/1e293b/94a3b8?text=🦅', true);
                 } else { alert("Incorrect password."); }
-                return;
-            }
-
-            const configRef = doc(db, `games/${gameId}/config/main`);
-            const configDoc = await getDoc(configRef);
-            if (configDoc.exists() && configDoc.data().sessionActive) {
-                startCamera();
             } else {
-                alert("The game session has not been started by Admin (005) yet.");
+                const configRef = doc(db, `games/${gameId}/config/main`);
+                const configDoc = await getDoc(configRef);
+                if (configDoc.exists() && configDoc.data().sessionActive) {
+                    startCamera();
+                } else {
+                    alert("The game session has not been started by Admin (005) yet.");
+                }
             }
         }
 
@@ -249,28 +244,25 @@
             const usnValue = usnSelect.value;
             const usn = `1SB23CS${usnValue}`;
             const configRef = doc(db, `games/${gameId}/config/main`);
-            
-            if (!isDemoUser) {
-                try {
-                    await runTransaction(db, async (transaction) => {
-                        const configDoc = await transaction.get(configRef);
-                        if (!configDoc.exists()) throw "Game config not found!";
-                        const chosenUSNs = configDoc.data().chosenUSNs || [];
-                        if (chosenUSNs.includes(usn)) {
-                            throw "This USN is already taken. Please choose another.";
-                        }
-                        transaction.update(configRef, { chosenUSNs: arrayUnion(usn) });
-                    });
-                } catch (error) {
-                    alert(error);
-                    return;
-                }
+            try {
+                await runTransaction(db, async (transaction) => {
+                    const configDoc = await transaction.get(configRef);
+                    if (!configDoc.exists()) throw "Game config not found!";
+                    const chosenUSNs = configDoc.data().chosenUSNs || [];
+                    if (chosenUSNs.includes(usn)) {
+                        throw "This USN is already taken. Please choose another.";
+                    }
+                    transaction.update(configRef, { chosenUSNs: arrayUnion(usn) });
+                });
+            } catch (error) {
+                alert(error);
+                return;
             }
 
             loginModal.classList.add('hidden');
             const playerName = USN_NAME_MAP[usnValue] || `Player ${usnValue}`;
             const playerDocRef = doc(db, `games/${gameId}/players/${playerId}`);
-            await setDoc(playerDocRef, { usn, name: playerName, photoURL: photoUrl, isAdmin, isDemo: isDemoUser, guesses: [], startTime: null, timeTaken: null, isWinner: false, isPerfect: false, isEliminated: false });
+            await setDoc(playerDocRef, { usn, name: playerName, photoURL: photoUrl, isAdmin: isJoiningAdmin, guesses: [], startTime: null, timeTaken: null, isWinner: false, isPerfect: false, isEliminated: false });
             
             lobbyUi.classList.remove('hidden');
             playerCountDisplay.classList.remove('hidden');
@@ -279,41 +271,6 @@
                 adminControls.classList.remove('hidden');
                 newGameBtn.classList.remove('hidden');
             }
-        }
-        
-        function startDemoMode() {
-            loginModal.classList.add('hidden');
-            gameUi.classList.remove('hidden');
-            playerCountDisplay.classList.add('hidden');
-            document.getElementById('player-graph').classList.add('hidden');
-            document.querySelector('#game-ui > div > h3').classList.add('hidden');
-
-            playerNameEl.textContent = "The Eagle (Demo)";
-            document.getElementById('standard-input-section').classList.add('hidden');
-            document.getElementById('number-grid-container').classList.remove('hidden');
-            document.getElementById('search-space-display').classList.remove('hidden');
-            populateNumberGrid();
-            
-            let localSecret = Math.floor(Math.random() * 100) + 1;
-            let localGuesses = 0;
-            let localLow = 1, localHigh = 100;
-            updateSearchSpaceDisplay(localLow, localHigh);
-
-            document.querySelectorAll('.number-circle').forEach(circle => {
-                circle.addEventListener('click', (e) => {
-                    const guess = parseInt(e.currentTarget.dataset.number);
-                    localGuesses++;
-                    if (guess === localSecret) {
-                        document.getElementById('feedback').textContent = "🎉 Correct! You found the number! 🎉";
-                        return;
-                    }
-                    const feedbackType = guess < localSecret ? 'higher' : 'lower';
-                    document.getElementById('feedback').textContent = `${feedbackType.charAt(0).toUpperCase() + feedbackType.slice(1)} than ${guess}`;
-                    if (feedbackType === 'higher') localLow = Math.max(localLow, guess + 1);
-                    else localHigh = Math.min(localHigh, guess - 1);
-                    updateSearchSpaceDisplay(localLow, localHigh);
-                });
-            });
         }
         
         async function startGame() {
@@ -326,20 +283,35 @@
                 batch.update(doc(db, `games/${gameId}/players/${pDoc.id}`), { startTime: serverTimestamp() });
             });
             await batch.commit();
-            await updateDoc(configRef, { gameStarted: true, gameEndTime: serverTimestamp() });
+            await updateDoc(configRef, { gameStarted: true });
         }
 
         function calculateBinarySearchPath(target, min, max) { let path = [], low = min, high = max; while (low <= high) { let mid = Math.floor((low + high) / 2); path.push(mid); if (mid === target) return path; if (mid < target) low = mid + 1; else high = mid - 1; } return path; }
         async function startCamera() { loginModal.classList.add('hidden'); cameraModal.classList.remove('hidden'); try { const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: false }); const videoFeed = document.getElementById('video-feed'); videoFeed.srcObject = stream; document.getElementById('camera-status').textContent = "Align your face and take a photo."; } catch (err) { document.getElementById('camera-status').textContent = "Camera access denied."; document.getElementById('take-photo-btn').disabled = true; } }
-        function takePhoto() { const videoFeed = document.getElementById('video-feed'); const photoCanvas = document.getElementById('photo-canvas'); const context = photoCanvas.getContext('2d'); const targetSize = 200; photoCanvas.width = targetSize; photoCanvas.height = targetSize; context.drawImage(videoFeed, 0, 0, targetSize, targetSize); const localPhotoDataUrl = photoCanvas.toDataURL('image/jpeg', 0.8); const stream = videoFeed.srcObject; if (stream) { stream.getTracks().forEach(track => track.stop()); videoFeed.srcObject = null; } document.getElementById('camera-modal').classList.add('hidden'); joinGame(currentUserId, localPhotoDataUrl, false); }
+        
+        // FIXED: Resizing the photo to ensure it's small enough for Firestore.
+        function takePhoto() {
+            const videoFeed = document.getElementById('video-feed');
+            const photoCanvas = document.getElementById('photo-canvas');
+            const context = photoCanvas.getContext('2d');
+            const targetSize = 200; // Resize to 200x200 pixels
+            photoCanvas.width = targetSize;
+            photoCanvas.height = targetSize;
+            context.drawImage(videoFeed, 0, 0, targetSize, targetSize);
+            const localPhotoDataUrl = photoCanvas.toDataURL('image/jpeg', 0.8);
+            const stream = videoFeed.srcObject;
+            if (stream) { stream.getTracks().forEach(track => track.stop()); videoFeed.srcObject = null; }
+            document.getElementById('camera-modal').classList.add('hidden');
+            joinGame(currentUserId, localPhotoDataUrl, false);
+        }
+
         function populateNumberGrid() { const numberGrid = document.getElementById('number-grid'); numberGrid.innerHTML = ''; for (let i = 1; i <= 100; i++) { const circle = document.createElement('div'); circle.className = 'number-circle w-8 h-8 rounded-full flex items-center justify-center text-xs font-semibold bg-cyan-700'; circle.textContent = i; circle.dataset.number = i; circle.addEventListener('click', (e) => { if (!isAdmin) return; processGuess(parseInt(e.currentTarget.dataset.number)); }); numberGrid.appendChild(circle); } }
-        function renderLobbyGraph(players) { const lobbyPlayerGraph = document.getElementById('lobby-player-graph'); document.getElementById('player-count').textContent = players.filter(p => !p.isDemo).length; lobbyPlayerGraph.innerHTML = ''; players.forEach(player => { if(player.isDemo) return; const photoSrc = (player.usn === '1SB23CS000' || player.usn === '1SB23CS005') ? 'https://placehold.co/100x100/1e293b/94a3b8?text=🦅' : player.photoURL; const card = document.createElement('div'); card.className = 'flex flex-col items-center'; card.innerHTML = `<img src="${photoSrc}" class="w-16 h-16 rounded-full object-cover border-2 border-gray-500"><p class="text-xs font-semibold mt-1 truncate w-20 text-center">${player.name}</p>`; lobbyPlayerGraph.appendChild(card); }); }
-        function renderPlayerGraph(players) { const playerGraph = document.getElementById('player-graph'); playerGraph.innerHTML = ''; players.filter(p => !p.isDemo).sort((a, b) => (a.startTime?.seconds || 0) - (b.startTime?.seconds || 0)).forEach(player => { const card = document.createElement('div'); card.className = 'player-card flex flex-col items-center'; if(player.isEliminated) card.classList.add('opacity-40'); const photoSrc = (player.usn === '1SB23CS000' || player.usn === '1SB23CS005') ? 'https://placehold.co/100x100/1e293b/94a3b8?text=🦅' : player.photoURL; const timeTaken = player.timeTaken; const maxStripHeight = 128, minStripHeight = 32; let stripHeight = maxStripHeight; if(timeTaken) { stripHeight = Math.max(minStripHeight, maxStripHeight / (timeTaken / 10 + 1)); } card.innerHTML = `<img src="${photoSrc}" class="w-12 h-12 sm:w-16 sm:h-16 rounded-full object-cover border-2 ${player.isWinner ? 'border-amber-400' : 'border-gray-600'} mb-2"><div class="score-strip-container w-6 sm:w-8 bg-gray-700 rounded-md flex flex-col-reverse overflow-hidden" style="height: ${player.isWinner ? stripHeight : maxStripHeight}px;">${Array.from({ length: 10 }).map((_, i) => { const guess = player.guesses[i]; let colorClass = 'bg-gray-700'; if (guess) colorClass = guess.isGolden ? 'bg-yellow-400' : 'bg-cyan-600'; return `<div class="flex-1 ${colorClass}"></div>`; }).join('')}</div><p class="text-xs font-semibold mt-1 truncate w-20 text-center">${player.name}</p><p class="text-xs text-gray-400">${player.isWinner ? `${timeTaken.toFixed(1)}s` : player.isEliminated ? 'Eliminated' : ''}</p>`; playerGraph.appendChild(card); }); }
-        function checkGlobalWinner(players, config) { const livePlayers = players.filter(p => !p.isDemo); const winnerModal = document.getElementById('winner-modal'); const winnerInfo = document.getElementById('winner-info'); const gameTimeOver = config.gameEndTime && (new Date() - config.gameEndTime.toDate()) > 100000; if (!gameTimeOver) return; if (winnerModal.dataset.shown) return; winnerModal.dataset.shown = 'true'; const winners = livePlayers.filter(p => p.isWinner); if (winners.length === 0) { winnerInfo.innerHTML = `<p class="text-xl text-gray-400">No one guessed the number in time!</p>`; } else { const perfectWinners = winners.filter(p => p.isPerfect); const finalWinners = (perfectWinners.length > 0 ? perfectWinners : winners).sort((a,b) => a.timeTaken - b.timeTaken); const topWinner = finalWinners[0]; const winnerPhotoSrc = (topWinner.usn === '1SB23CS000' || topWinner.usn === '1SB23CS005') ? 'https://placehold.co/100x100/1e293b/94a3b8?text=🦅' : topWinner.photoURL; const frameClass = topWinner.isPerfect ? 'winner-photo-frame-perfect' : 'winner-photo-frame-normal'; winnerInfo.innerHTML = `<img src="${winnerPhotoSrc}" class="${frameClass} w-32 h-32 rounded-full object-cover mb-4"><p class="text-2xl font-semibold">${topWinner.name}</p><p class="text-gray-400">${topWinner.usn}</p><p class="text-5xl font-bold my-2 text-green-300">${topWinner.timeTaken.toFixed(2)}s</p>${topWinner.isPerfect ? '<p class="text-yellow-400 font-semibold text-xl">🏆 Flawless Victory! 🏆</p>' : ''}`; confetti({ particleCount: 150, spread: 90, origin: { y: 0.6 } }); } setTimeout(() => { winnerModal.classList.remove('hidden'); setTimeout(() => winnerModal.querySelector('div').classList.remove('scale-95', 'opacity-0'), 50); }, 7000); }
+        function renderLobbyGraph(players) { const lobbyPlayerGraph = document.getElementById('lobby-player-graph'); document.getElementById('player-count').textContent = players.length; lobbyPlayerGraph.innerHTML = ''; players.forEach(player => { const photoSrc = (player.usn === '1SB23CS000' || player.usn === '1SB23CS005') ? 'https://placehold.co/100x100/1e293b/94a3b8?text=🦅' : player.photoURL; const card = document.createElement('div'); card.className = 'flex flex-col items-center'; card.innerHTML = `<img src="${photoSrc}" class="w-16 h-16 rounded-full object-cover border-2 border-gray-500"><p class="text-xs font-semibold mt-1 truncate w-20 text-center">${player.name}</p>`; lobbyPlayerGraph.appendChild(card); }); }
+        function renderPlayerGraph(players) { const playerGraph = document.getElementById('player-graph'); playerGraph.innerHTML = ''; players.sort((a, b) => (a.startTime?.seconds || 0) - (b.startTime?.seconds || 0)); players.forEach(player => { const card = document.createElement('div'); card.className = 'player-card flex flex-col items-center'; if(player.isEliminated) card.classList.add('opacity-40'); const photoSrc = (player.usn === '1SB23CS000' || player.usn === '1SB23CS005') ? 'https://placehold.co/100x100/1e293b/94a3b8?text=🦅' : player.photoURL; const timeTaken = player.timeTaken; const maxStripHeight = 128, minStripHeight = 32; let stripHeight = maxStripHeight; if(timeTaken) { stripHeight = Math.max(minStripHeight, maxStripHeight / (timeTaken / 10 + 1)); } card.innerHTML = `<img src="${photoSrc}" class="w-12 h-12 sm:w-16 sm:h-16 rounded-full object-cover border-2 ${player.isWinner ? 'border-amber-400' : 'border-gray-600'} mb-2"><div class="score-strip-container w-6 sm:w-8 bg-gray-700 rounded-md flex flex-col-reverse overflow-hidden" style="height: ${player.isWinner ? stripHeight : maxStripHeight}px;">${Array.from({ length: 10 }).map((_, i) => { const guess = player.guesses[i]; let colorClass = 'bg-gray-700'; if (guess) colorClass = guess.isGolden ? 'bg-yellow-400' : 'bg-cyan-600'; return `<div class="flex-1 ${colorClass}"></div>`; }).join('')}</div><p class="text-xs font-semibold mt-1 truncate w-20 text-center">${player.name}</p><p class="text-xs text-gray-400">${player.isWinner ? `${timeTaken.toFixed(1)}s` : player.isEliminated ? 'Eliminated' : ''}</p>`; playerGraph.appendChild(card); }); }
+        function checkGlobalWinner(players) { const winnerModal = document.getElementById('winner-modal'); const winnerInfo = document.getElementById('winner-info'); const gameEnded = players.every(p => p.isWinner || p.isEliminated); if (!gameEnded) return; if (winnerModal.dataset.shown) return; winnerModal.dataset.shown = 'true'; const winners = players.filter(p => p.isWinner); if (winners.length === 0) { winnerInfo.innerHTML = `<p class="text-xl text-gray-400">No one guessed the number in time!</p>`; } else { const perfectWinners = winners.filter(p => p.isPerfect); const finalWinners = (perfectWinners.length > 0 ? perfectWinners : winners).sort((a,b) => a.timeTaken - b.timeTaken); const topWinner = finalWinners[0]; const winnerPhotoSrc = (topWinner.usn === '1SB23CS000' || topWinner.usn === '1SB23CS005') ? 'https://placehold.co/100x100/1e293b/94a3b8?text=🦅' : topWinner.photoURL; const frameClass = topWinner.isPerfect ? 'winner-photo-frame-perfect' : 'winner-photo-frame-normal'; winnerInfo.innerHTML = `<img src="${winnerPhotoSrc}" class="${frameClass} w-32 h-32 rounded-full object-cover mb-4"><p class="text-2xl font-semibold">${topWinner.name}</p><p class="text-gray-400">${topWinner.usn}</p><p class="text-5xl font-bold my-2 text-green-300">${topWinner.timeTaken.toFixed(2)}s</p>${topWinner.isPerfect ? '<p class="text-yellow-400 font-semibold text-xl">🏆 Flawless Victory! 🏆</p>' : ''}`; } setTimeout(() => { confetti({ particleCount: 150, spread: 90, origin: { y: 0.6 } }); winnerModal.classList.remove('hidden'); setTimeout(() => winnerModal.querySelector('div').classList.remove('scale-95', 'opacity-0'), 50); }, 7000); }
         function handleTimerAndElimination(players) { const gameTimer = document.getElementById('game-timer'); const feedback = document.getElementById('feedback'); let gameTimerInterval; if(gameTimerInterval) clearInterval(gameTimerInterval); const me = players.find(p => p.id === currentUserId); if(!me || me.isWinner || me.isEliminated || !me.startTime) { gameTimer.textContent = '---'; return; } gameTimerInterval = setInterval(async () => { const elapsed = (new Date() - me.startTime.toDate()) / 1000; const timeLeft = Math.max(0, 100 - elapsed); gameTimer.textContent = Math.ceil(timeLeft); if (timeLeft <= 0) { clearInterval(gameTimerInterval); feedback.textContent = "Time's up! You've been eliminated."; if(!isAdmin) { document.getElementById('guess-input').disabled = true; document.getElementById('guess-btn').disabled = true; } await updateDoc(doc(db, `games/${gameId}/players/${currentUserId}`), { isEliminated: true }); } }, 1000); }
-        async function processWin(finalGuesses) { const playerDocSnap = await getDoc(doc(db, `games/${gameId}/players/${currentUserId}`)); const startTime = playerDocSnap.data().startTime.toDate(); const timeTaken = (new Date() - startTime) / 1000; const gameConfigSnap = await getDoc(doc(db, `games/${gameId}/config/main`)); const perfectPath = gameConfigSnap.data().perfectPath || []; const isPerfect = finalGuesses.length === perfectPath.length && finalGuesses.every((g, i) => g.isGolden); await updateDoc(doc(db, `games/${gameId}/players/${currentUserId}`), { guesses: finalGuesses, timeTaken, isWinner: true, isPerfect }); }
+        async function processWin(finalGuesses) { const playerDocSnap = await getDoc(doc(db, `games/${gameId}/players/${currentUserId}`)); const startTime = playerDocSnap.data().startTime.toDate(); const timeTaken = (new Date() - startTime) / 1000; const gameConfigSnap = await getDoc(doc(db, `games/${gameId}/config/main`)); const perfectPath = gameConfigSnap.data().perfectPath || []; const isPerfect = finalGuesses.length === perfectPath.length && finalGuesses.every((g, i) => g.guess === perfectPath[i]); await updateDoc(doc(db, `games/${gameId}/players/${currentUserId}`), { guesses: finalGuesses, timeTaken, isWinner: true, isPerfect }); }
         async function processGuess(guess) { let isProcessingGuess = false; if (isProcessingGuess || isNaN(guess)) return; isProcessingGuess = true; const gameDocSnap = await getDoc(doc(db, `games/${gameId}/config/main`)); const { secretNumber, perfectPath } = gameDocSnap.data(); const playerDocSnap = await getDoc(doc(db, `games/${gameId}/players/${currentUserId}`)); const player = playerDocSnap.data(); if (!player || player.isWinner || player.isEliminated) { isProcessingGuess = false; return; } const currentStep = player.guesses.length; const isGolden = perfectPath && guess === perfectPath[currentStep]; const newGuesses = [...player.guesses, { guess, isGolden }]; if (guess === secretNumber) { document.getElementById('feedback').textContent = "🎉 Correct! You've found the number! 🎉"; await processWin(newGuesses); } else { const feedbackType = guess < secretNumber ? 'higher' : 'lower'; document.getElementById('feedback').textContent = `${feedbackType.charAt(0).toUpperCase() + feedbackType.slice(1)} than ${guess}`; if (isAdmin) { let localLow = 1, localHigh = 100; if (feedbackType === 'higher') localLow = Math.max(localLow, guess + 1); else localHigh = Math.min(localHigh, guess - 1); document.getElementById('low-val').textContent = localLow; document.getElementById('high-val').textContent = localHigh; document.getElementById('mid-val').textContent = Math.floor((localLow + localHigh) / 2); document.querySelectorAll('.number-circle').forEach(c => { const n = parseInt(c.dataset.number); let d = false; if (feedbackType === 'higher') { if (n <= guess) d = true; } else if (feedbackType === 'lower') { if (n >= guess) d = true; } if (d) c.classList.add('opacity-20'); }); } await updateDoc(doc(db, `games/${gameId}/players/${currentUserId}`), { guesses: newGuesses }); } isProcessingGuess = false; }
-        function updateSearchSpaceDisplay(low, high) { document.getElementById('low-val').textContent = low; document.getElementById('high-val').textContent = high; document.getElementById('mid-val').textContent = Math.floor((low + high) / 2); }
 
         function attachMainListeners() {
             joinBtn.addEventListener('click', handleJoinRequest);
@@ -372,12 +344,9 @@
                     gameUi.classList.remove('hidden');
                     playerNameEl.textContent = USN_NAME_MAP[usnSelect.value] || `Player ${usnSelect.value}`;
                     populateNumberGrid();
-                    if(isDemoUser) {
+                    if(isAdmin) {
                         document.getElementById('standard-input-section').classList.add('hidden');
                         document.getElementById('number-grid-container').classList.remove('hidden');
-                    } else if (isAdmin) {
-                        document.getElementById('standard-input-section').classList.remove('hidden');
-                        document.getElementById('number-grid-container').classList.add('hidden');
                     }
                 }
             });
@@ -387,14 +356,14 @@
             const playersUnsub = onSnapshot(query(playersRef), (snapshot) => {
                 const allPlayers = [];
                 snapshot.forEach(doc => allPlayers.push({ id: doc.id, ...doc.data() }));
-                document.getElementById('player-count').textContent = allPlayers.filter(p => !p.isDemo).length;
+                document.getElementById('player-count').textContent = allPlayers.length;
                 renderLobbyGraph(allPlayers);
                 renderPlayerGraph(allPlayers);
                 
                 getDoc(doc(db, `games/${gameId}/config/main`)).then(d => {
                     if (d.exists() && d.data().gameStarted) {
                         handleTimerAndElimination(allPlayers);
-                        checkGlobalWinner(allPlayers, d.data());
+                        checkGlobalWinner(allPlayers);
                     }
                 });
             });
