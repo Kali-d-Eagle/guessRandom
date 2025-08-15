@@ -231,7 +231,6 @@
                 return;
             }
 
-            // For regular players
             const configRef = doc(db, `games/${gameId}/config/main`);
             const configDoc = await getDoc(configRef);
             if (configDoc.exists() && configDoc.data().sessionActive) {
@@ -246,19 +245,21 @@
             const usn = `1SB23CS${usnValue}`;
             const configRef = doc(db, `games/${gameId}/config/main`);
             
-            try {
-                await runTransaction(db, async (transaction) => {
-                    const configDoc = await transaction.get(configRef);
-                    if (!configDoc.exists()) throw "Game config not found!";
-                    const chosenUSNs = configDoc.data().chosenUSNs || [];
-                    if (chosenUSNs.includes(usn)) {
-                        throw "This USN is already taken. Please choose another.";
-                    }
-                    transaction.update(configRef, { chosenUSNs: arrayUnion(usn) });
-                });
-            } catch (error) {
-                alert(error);
-                return;
+            if (!isDemoUser) {
+                try {
+                    await runTransaction(db, async (transaction) => {
+                        const configDoc = await transaction.get(configRef);
+                        if (!configDoc.exists()) throw "Game config not found!";
+                        const chosenUSNs = configDoc.data().chosenUSNs || [];
+                        if (chosenUSNs.includes(usn)) {
+                            throw "This USN is already taken. Please choose another.";
+                        }
+                        transaction.update(configRef, { chosenUSNs: arrayUnion(usn) });
+                    });
+                } catch (error) {
+                    alert(error);
+                    return;
+                }
             }
 
             loginModal.classList.add('hidden');
@@ -278,16 +279,15 @@
         function startDemoMode() {
             loginModal.classList.add('hidden');
             gameUi.classList.remove('hidden');
-            playerCountDisplay.classList.add('hidden'); // No player count in demo
-            document.getElementById('player-graph').classList.add('hidden'); // No live board in demo
-            document.querySelector('#game-ui > div > h3').classList.add('hidden'); // Hide "Live Player Board" title
+            playerCountDisplay.classList.add('hidden');
+            document.getElementById('player-graph').classList.add('hidden');
+            document.querySelector('#game-ui > div > h3').classList.add('hidden');
 
             playerNameEl.textContent = "The Eagle (Demo)";
             document.getElementById('standard-input-section').classList.add('hidden');
             document.getElementById('number-grid-container').classList.remove('hidden');
             document.getElementById('search-space-display').classList.remove('hidden');
             
-            // Local game logic for demo
             let localSecret = Math.floor(Math.random() * 100) + 1;
             let localGuesses = 0;
             let localLow = 1, localHigh = 100;
@@ -312,45 +312,19 @@
             });
         }
         
-        async function startGame() { /* ... unchanged ... */ }
-        function calculateBinarySearchPath(target, min, max) { /* ... unchanged ... */ }
-        async function startCamera() { /* ... unchanged ... */ }
-        function takePhoto() { /* ... unchanged ... */ }
-        function populateNumberGrid() { /* ... unchanged ... */ }
-        function renderLobbyGraph(players) { /* ... unchanged ... */ }
-        function renderPlayerGraph(players) { /* ... unchanged ... */ }
-        function checkGlobalWinner(players) { /* ... unchanged ... */ }
-        function handleTimerAndElimination(players) { /* ... unchanged ... */ }
-        async function processWin(finalGuesses) { /* ... unchanged ... */ }
-        async function processGuess(guess) { /* ... unchanged ... */ }
-        function attachMainListeners() { /* ... unchanged ... */ }
-        function attachGameListeners() { /* ... unchanged ... */ }
-        
-        async function initializeAuth() {
-            onAuthStateChanged(auth, (user) => {
-                if (user) {
-                    currentUser = user; currentUserId = user.uid;
-                    authStatus.textContent = "Connected.";
-                    authStatus.classList.replace('text-gray-500', 'text-green-400');
-                    joinBtn.disabled = false;
-                    localListeners.forEach(unsub => unsub());
-                    localListeners = [];
-                    listenForSession();
-                    attachMainListeners();
-                    attachGameListeners();
-                } else { authStatus.textContent = "Auth Failed."; }
+        async function startGame() {
+            startGameBtn.disabled = true;
+            const configRef = doc(db, `games/${gameId}/config/main`);
+            const playersRef = collection(db, `games/${gameId}/players`);
+            const playerDocs = await getDocs(playersRef);
+            const batch = writeBatch(db);
+            playerDocs.forEach(pDoc => {
+                batch.update(doc(db, `games/${gameId}/players/${pDoc.id}`), { startTime: serverTimestamp() });
             });
-            try { await signInAnonymously(auth); } catch (error) { console.error("Auth error:", error); }
+            await batch.commit();
+            await updateDoc(configRef, { gameStarted: true });
         }
 
-        function init() {
-            populateUSNSelect();
-            populateNumberGrid();
-            initializeAuth();
-        }
-
-        // --- Full definitions for copy-pasting ---
-        async function startGame() { startGameBtn.disabled = true; const configRef = doc(db, `games/${gameId}/config/main`); const playersRef = collection(db, `games/${gameId}/players`); const playerDocs = await getDocs(playersRef); const batch = writeBatch(db); playerDocs.forEach(pDoc => { batch.update(doc(db, `games/${gameId}/players/${pDoc.id}`), { startTime: serverTimestamp() }); }); await batch.commit(); await updateDoc(configRef, { gameStarted: true }); }
         function calculateBinarySearchPath(target, min, max) { let path = [], low = min, high = max; while (low <= high) { let mid = Math.floor((low + high) / 2); path.push(mid); if (mid === target) return path; if (mid < target) low = mid + 1; else high = mid - 1; } return path; }
         async function startCamera() { loginModal.classList.add('hidden'); cameraModal.classList.remove('hidden'); try { const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: false }); const videoFeed = document.getElementById('video-feed'); videoFeed.srcObject = stream; document.getElementById('camera-status').textContent = "Align your face and take a photo."; } catch (err) { document.getElementById('camera-status').textContent = "Camera access denied."; document.getElementById('take-photo-btn').disabled = true; } }
         function takePhoto() { const videoFeed = document.getElementById('video-feed'); const photoCanvas = document.getElementById('photo-canvas'); const context = photoCanvas.getContext('2d'); const targetSize = 200; photoCanvas.width = targetSize; photoCanvas.height = targetSize; context.drawImage(videoFeed, 0, 0, targetSize, targetSize); const localPhotoDataUrl = photoCanvas.toDataURL('image/jpeg', 0.8); const stream = videoFeed.srcObject; if (stream) { stream.getTracks().forEach(track => track.stop()); videoFeed.srcObject = null; } document.getElementById('camera-modal').classList.add('hidden'); joinGame(currentUserId, localPhotoDataUrl, false); }
