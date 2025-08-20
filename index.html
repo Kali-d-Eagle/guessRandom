@@ -368,53 +368,6 @@
             }
         }
         
-        /*
-        function startDemoMode() {
-            loginModal.classList.add('hidden');
-            gameUi.classList.remove('hidden');
-            playerCountDisplay.classList.add('hidden');
-            document.getElementById('player-graph').classList.add('hidden');
-            document.querySelector('#game-ui > div > h3').classList.add('hidden');
-
-            playerNameEl.textContent = "The Eagle (Demo)";
-            document.getElementById('standard-input-section').classList.add('hidden');
-            document.getElementById('number-grid-container').classList.remove('hidden');
-            document.getElementById('search-space-display').classList.remove('hidden');
-            populateNumberGrid();
-            
-            let localSecret = Math.floor(Math.random() * 100) + 1;
-            let localGuesses = 0;
-            let localLow = 1, localHigh = 100;
-            updateSearchSpaceDisplay(localLow, localHigh);
-
-            
-
-            document.querySelectorAll('.number-circle').forEach(circle => {
-                circle.addEventListener('click', (e) => {
-                    const guess = parseInt(e.currentTarget.dataset.number);
-                    localGuesses++;
-                    if (guess === localSecret) {
-                        document.getElementById('feedback').textContent = "🎉 Correct! You found the number! 🎉";
-                        return;
-                    }
-                    const feedbackType = guess < localSecret ? 'higher' : 'lower';
-                    document.getElementById('feedback').textContent = `${feedbackType.charAt(0).toUpperCase() + feedbackType.slice(1)} than ${guess}`;
-                    if (feedbackType === 'higher') localLow = Math.max(localLow, guess + 1);
-                    else localHigh = Math.min(localHigh, guess - 1);
-                
-                    document.querySelectorAll('.number-circle').forEach(c => {
-                        const n = parseInt(c.dataset.number);
-                        if (n < localLow || n > localHigh) {
-                            c.classList.add('opacity-20', 'cursor-not-allowed');
-                        }
-                    });
-                    e.currentTarget.classList.add('opacity-20', 'cursor-not-allowed');
-                    updateSearchSpaceDisplay(localLow, localHigh);
-                });
-            });
-            
-        }
-        */ 
         
         function startDemoMode() {
             loginModal.classList.add('hidden');
@@ -432,6 +385,9 @@
             let localSecret = Math.floor(Math.random() * 100) + 1;
             let localGuesses = 0;
             let localLow = 1, localHigh = 100;
+            let willCheat = prompt("Wanna Cheat?");
+            if(willCheat === "Y" || willCheat === "y" || willCheat === "YES" || willCheat === "yes" || willCheat === "Yes")
+                console.log("d SecretNum is : ",localSecret);
             updateSearchSpaceDisplay(localLow, localHigh);
 
             document.querySelectorAll('.number-circle').forEach(circle => {
@@ -524,63 +480,7 @@
         function populateNumberGrid() { const numberGrid = document.getElementById('number-grid'); numberGrid.innerHTML = ''; for (let i = 1; i <= 100; i++) { const circle = document.createElement('div'); circle.className = 'number-circle w-8 h-8 rounded-full flex items-center justify-center text-xs font-semibold bg-cyan-700'; circle.textContent = i; circle.dataset.number = i; circle.addEventListener('click', (e) => { if (!isAdmin) return; processGuess(parseInt(e.currentTarget.dataset.number)); }); numberGrid.appendChild(circle); } }
         function renderLobbyGraph(players) { const lobbyPlayerGraph = document.getElementById('lobby-player-graph'); document.getElementById('player-count').textContent = players.filter(p => !p.isDemo).length; lobbyPlayerGraph.innerHTML = ''; players.forEach(player => { if(player.isDemo) return; const photoSrc = (player.usn === '1SB23CS000' || player.usn === '1SB23CS005') ? 'https://placehold.co/100x100/1e293b/94a3b8?text=🦅' : player.photoURL; const card = document.createElement('div'); card.className = 'flex flex-col items-center'; card.innerHTML = `<img src="${photoSrc}" class="w-16 h-16 rounded-full object-cover border-2 border-gray-500"><p class="text-xs font-semibold mt-1 truncate w-20 text-center">${player.name}</p>`; lobbyPlayerGraph.appendChild(card); }); }
         function renderPlayerGraph(players) { const playerGraph = document.getElementById('player-graph'); playerGraph.innerHTML = ''; players.filter(p => !p.isDemo).sort((a, b) => (a.startTime?.seconds || 0) - (b.startTime?.seconds || 0)).forEach(player => { const card = document.createElement('div'); card.className = 'player-card flex flex-col items-center'; if(player.isEliminated) card.classList.add('opacity-40'); const photoSrc = (player.usn === '1SB23CS000' || player.usn === '1SB23CS005') ? 'https://placehold.co/100x100/1e293b/94a3b8?text=🦅' : player.photoURL; const timeTaken = player.timeTaken; const maxStripHeight = 128, minStripHeight = 32; let stripHeight = maxStripHeight; if(timeTaken) { stripHeight = Math.max(minStripHeight, maxStripHeight / (timeTaken / 10 + 1)); } card.innerHTML = `<img src="${photoSrc}" class="w-12 h-12 sm:w-16 sm:h-16 rounded-full object-cover border-2 ${player.isWinner ? 'border-amber-400' : 'border-gray-600'} mb-2"><div class="score-strip-container w-6 sm:w-8 bg-gray-700 rounded-md flex flex-col-reverse overflow-hidden" style="height: ${player.isWinner ? stripHeight : maxStripHeight}px;">${Array.from({ length: 10 }).map((_, i) => { const guess = player.guesses[i]; let colorClass = 'bg-gray-700'; if (guess) colorClass = guess.isGolden ? 'bg-yellow-400' : 'bg-cyan-600'; return `<div class="flex-1 ${colorClass}"></div>`; }).join('')}</div><p class="text-xs font-semibold mt-1 truncate w-20 text-center">${player.name}</p><p class="text-xs text-gray-400">${player.isWinner ? `${timeTaken.toFixed(1)}s` : player.isEliminated ? 'Eliminated' : ''}</p>`; playerGraph.appendChild(card); }); }
-        /*
-        function checkGlobalWinner(players, config) { 
-            const livePlayers = players.filter(p => !p.isDemo); 
-            const winnerModal = document.getElementById('winner-modal'); 
-            const winnerInfo = document.getElementById('winner-info'); 
-            
-            if (!gameTimeOver) return; 
-            if (winnerModal.dataset.shown) return; 
-            winnerModal.dataset.shown = 'true'; 
-            const winners = livePlayers.filter(p => p.isWinner); 
-            const isWinnerFound = winners.length > 0;
-            const gameTimeOver = config.gameEndTime && (new Date() - config.gameEndTime.toDate()) > 100000; 
-
-            if (!isWinnerFound && !gameTimeOver) {
-                return;
-            }
-            /*
-            if (winners.length === 0) { 
-                winnerInfo.innerHTML = `<p class="text-xl text-gray-400">No one guessed the number in time!</p>`; 
-            } else { 
-                const perfectWinners = winners.filter(p => p.isPerfect); 
-                const finalWinners = (perfectWinners.length > 0 ? perfectWinners : winners).sort((a,b) => a.timeTaken - b.timeTaken); 
-                const topWinner = finalWinners[0]; 
-                const winnerPhotoSrc = (topWinner.usn === '1SB23CS000' || topWinner.usn === '1SB23CS005') ? 'https://placehold.co/100x100/1e293b/94a3b8?text=🦅' : topWinner.photoURL; 
-                const frameClass = topWinner.isPerfect ? 'winner-photo-frame-perfect' : 'winner-photo-frame-normal'; 
-                winnerInfo.innerHTML = `<img src="${winnerPhotoSrc}" class="${frameClass} w-32 h-32 rounded-full object-cover mb-4"><p class="text-2xl font-semibold">${topWinner.name}</p><p class="text-gray-400">${topWinner.usn}</p><p class="text-5xl font-bold my-2 text-green-300">${topWinner.timeTaken.toFixed(2)}s</p>${topWinner.isPerfect ? '<p class="text-yellow-400 font-semibold text-xl">🏆 Flawless Victory! 🏆</p>' : ''}`; 
-                confetti({ particleCount: 150, spread: 90, origin: { y: 0.6 } }); 
-            } 
-            setTimeout(() => { winnerModal.classList.remove('hidden'); 
-            setTimeout(() => winnerModal.querySelector('div').classList.remove('scale-95', 'opacity-0'), 50); }, 7000); 
-            */
-            /*
-            winnerModal.dataset.shown = 'true';
-
-            // Decide what to display
-            if (isWinnerFound) {
-                // We have a winner! Find the best one (perfect score, then fastest time).
-                const perfectWinners = winners.filter(p => p.isPerfect);
-                const finalWinners = (perfectWinners.length > 0 ? perfectWinners : winners).sort((a, b) => a.timeTaken - b.timeTaken);
-                const topWinner = finalWinners[0];
-                const winnerPhotoSrc = (topWinner.usn === '1SB23CS000' || topWinner.usn === '1SB23CS005') ? 'https://placehold.co/100x100/1e293b/94a3b8?text=🦅' : topWinner.photoURL;
-                const frameClass = topWinner.isPerfect ? 'winner-photo-frame-perfect' : 'winner-photo-frame-normal';
-                winnerInfo.innerHTML = `<img src="${winnerPhotoSrc}" class="${frameClass} w-32 h-32 rounded-full object-cover mb-4"><p class="text-2xl font-semibold">${topWinner.name}</p><p class="text-gray-400">${topWinner.usn}</p><p class="text-5xl font-bold my-2 text-green-300">${topWinner.timeTaken.toFixed(2)}s</p>${topWinner.isPerfect ? '<p class="text-yellow-400 font-semibold text-xl">🏆 Flawless Victory! 🏆</p>' : ''}`;
-                confetti({ particleCount: 150, spread: 90, origin: { y: 0.6 } });
-            } else {
-                // Time ran out and there were no winners.
-                winnerInfo.innerHTML = `<p class="text-xl text-gray-400">Time's up! No one guessed the number.</p><p class="text-2xl mt-4">The secret number was: <span class="font-bold text-cyan-300">${config.secretNumber}</span></p>`;
-            }
-
-            // This 7-second delay is for dramatic effect. You can reduce it or remove it if you want the modal to appear instantly.
-            // For example, change 7000 to 1000 for a 1-second delay.
-            setTimeout(() => {
-                winnerModal.classList.remove('hidden');
-                setTimeout(() => winnerModal.querySelector('div').classList.remove('scale-95', 'opacity-0'), 50);
-            }, 1500);
-        }
-        */
+        
         function checkGlobalWinner(players, config) {
             const winnerModal = document.getElementById('winner-modal');
             // --- First, check if the modal has already been shown. If so, do nothing.
